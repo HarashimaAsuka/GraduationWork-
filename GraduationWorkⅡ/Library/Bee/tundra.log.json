@@ -808,4 +808,7 @@
 {"msg":"enqueueNode","enqueuedNodeAnnotation":"CopyFiles Library/ScriptAssemblies/Assembly-CSharp-Editor.pdb","enqueuedNodeIndex":807,"enqueueingNodeAnnotation":"ScriptAssemblies","enqueueingNodeIndex":6}
 {"msg":"nodeOutputsMissing","annotation":"ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput","index":567,"files":["Library\\ilpp-configuration.nevergeneratedoutput"],"directories":[]}
 {"msg":"runNodeAction","annotation":"ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput","displayName":"ILPP-Configuration ilpp-configuration","index":567}
-{"msg":"noderesult","processed_node_count":634,"number_of_nodes_ever_queued":807,"annotation":"ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput","index":567,"exitcode":0,"outputfile":"Library\\ilpp-configuration.nevergeneratedoutput"}
+{"msg":"nodeRetryBuild","annotation":"Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll (+2 others)","index":542}
+{"msg":"runNodeAction","annotation":"Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll (+2 others)","displayName":"Compiling C# (Assembly-CSharp)","index":542}
+{"msg":"noderesult","processed_node_count":632,"number_of_nodes_ever_queued":807,"annotation":"ILPP-Configuration Library/ilpp-configuration.nevergeneratedoutput","index":567,"exitcode":0,"outputfile":"Library\\ilpp-configuration.nevergeneratedoutput"}
+{"msg":"noderesult","processed_node_count":798,"number_of_nodes_ever_queued":807,"annotation":"Csc Library/Bee/artifacts/1900b0aE.dag/Assembly-CSharp.dll (+2 others)","index":542,"exitcode":0,"outputfile":"Library\\Bee\\artifacts\\1900b0aE.dag\\Assembly-CSharp.dll"}

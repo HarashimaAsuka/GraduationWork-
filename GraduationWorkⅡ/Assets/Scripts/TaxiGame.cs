@@ -40,19 +40,6 @@ namespace ShoryoumaTaxi
 
         const float CAMF = 0.5f, CAM_UP = 1.6f, WARN_RANGE = 34f, WEB_R = 1.9f;
 
-        // ===================== 登場するもの =====================
-        class Enemy
-        {
-            public string type; public GameObject go; public Renderer body; public GameObject arils;
-            public float y0, y, yPrev, nx, nz, x, z, r, cd, ph, hit, deadT;
-            public int hp, max; public bool alive = true, shooter, bumped, ripe, emerged;
-        }
-        class Soul { public GameObject go; public float y0, y, yPrev, nx, nz, x, z, ph; public bool emerged, gone; }
-        class Shot { public GameObject go; public bool onibi; public float x, y, z, vx, vy, vz; public bool dead; }
-        class Salt { public GameObject go; public float x, y, z, yp, rot; public bool dead; }
-        class Flying { public GameObject go; public float x, y, z, vx, vy, vz, life, max, spin; public bool home; }
-        class Spark { public Transform tr; public Renderer rd; public Vector3 p, v; public float life, max; public Color c; }
-        class Goal { public float y; public string name; }
         struct Msg { public string text; public float dur, t0; }
 
         static readonly string[][] STOPS = {
@@ -236,7 +223,7 @@ namespace ShoryoumaTaxi
             {
                 resultTitle = "干からびた";
                 resultText = carrying && goal != null
-                    ? $"お客さんを乗せたまま、干からびてしまった。\n{goal.name}まで、あと {Mathf.CeilToInt(Mathf.Abs(goal.y - y) / 10)} 丈だった。"
+                    ? $"お客さんを乗せたまま、干からびてしまった。\n{goal.goalName}まで、あと {Mathf.CeilToInt(Mathf.Abs(goal.y - y) / 10)} 丈だった。"
                     : $"精霊馬は干からびてしまった。\n送り届けた魂は {delivered} 人。";
             }
             else
@@ -350,11 +337,11 @@ namespace ShoryoumaTaxi
             else { float lo = y + 200; if (lo > L - 50) lo = y + 40; gy = R(Mathf.Min(L - 46, lo), Mathf.Min(L - 45, y + 600)); }
             var zone = STOPS[Mathf.Clamp(gy / L < 0.2f ? 0 : gy / L < 0.45f ? 1 : gy / L < 0.7f ? 2 : 3, 0, 3)];
             goal = new Goal { y = gy, name = zone[Random.Range(0, zone.Length)] };
-            gateLabel.text = "行き先\n" + goal.name;
+            gateLabel.text = "行き先\n" + goal.goalName;
 
             bool turned = nd != want;
             want = nd;
-            Say($"「{goal.name}まで、お願いします」 {(turned ? "折り返して" : "このまま")}{(nd > 0 ? "上へ" : "下へ")}", 3.4f);
+            Say($"「{goal.goalName}まで、お願いします」 {(turned ? "折り返して" : "このまま")}{(nd > 0 ? "上へ" : "下へ")}", 3.4f);
             if (flags.Add("boardTip"))
             {
                 Say("そのまま進むか、折り返すかは、お客さんしだい。", 3f);
