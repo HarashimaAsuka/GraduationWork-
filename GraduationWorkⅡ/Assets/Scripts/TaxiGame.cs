@@ -336,7 +336,7 @@ namespace ShoryoumaTaxi
             if (nd < 0) { float hi = y - 200; if (hi < 50) hi = y - 40; gy = R(Mathf.Max(45, y - 600), Mathf.Max(46, hi)); }
             else { float lo = y + 200; if (lo > L - 50) lo = y + 40; gy = R(Mathf.Min(L - 46, lo), Mathf.Min(L - 45, y + 600)); }
             var zone = STOPS[Mathf.Clamp(gy / L < 0.2f ? 0 : gy / L < 0.45f ? 1 : gy / L < 0.7f ? 2 : 3, 0, 3)];
-            goal = new Goal { y = gy, name = zone[Random.Range(0, zone.Length)] };
+            goal = new Goal { y = gy, goalName = zone[Random.Range(0, zone.Length)] };
             gateLabel.text = "行き先\n" + goal.goalName;
 
             bool turned = nd != want;

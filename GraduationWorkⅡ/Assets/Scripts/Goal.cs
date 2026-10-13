@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class Goal : MonoBehaviour
+public class Goal
 {
     public float y;
     public string goalName;
