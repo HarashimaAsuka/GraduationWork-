@@ -13,14 +13,14 @@ m_ProjectFiles:
     m_ContentTrackingEnabled: 1
     m_ModificationDate:
       serializedVersion: 2
-      ticks: 639274652063616892
-    m_Hash: 564959425
+      ticks: 639274720134416825
+    m_Hash: 2976249563
 m_EmbeddedPackageManifests:
   m_ManifestsStatus: {}
 m_LocalPackages:
   m_LocalFileStatus: []
 m_ProjectPath: "C:/Github/GraduationWork-/GraduationWork\u2161/Packages"
-m_EditorVersion: 6000.3.26f1 (de8167e7440c)
+m_EditorVersion: 6000.3.18f1 (5ebeb53e4c07)
 m_ResolvedPackages:
 - packageId: com.unity.ai.navigation@2.0.15
   testable: 0
@@ -74,6 +74,8 @@ m_ResolvedPackages:
     - 2.0.15
     - 2.0.16
     compatible:
+    - 2.0.13
+    - 2.0.14
     - 2.0.15
     - 2.0.16
     recommended: 2.0.16
@@ -127,7 +129,7 @@ m_ResolvedPackages:
     revision: 0e0ff1be20adfee96fd144bb171fbff0d6ca5432
     path: 
   unityLifecycle:
-    version: 2.0.15
+    version: 2.0.13
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -163,7 +165,7 @@ m_ResolvedPackages:
   fingerprint: a9c5744fc1defd1740be5e82c85448725f66f86e
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 2.0.15
+    minimumPackageVersion: 2.0.13
     minimumUnityVersion: 6000.0
   compliance:
     status: 0
@@ -286,8 +288,12 @@ m_ResolvedPackages:
     - 2.13.5
     - 2.13.6
     compatible:
+    - 2.12.4
+    - 2.13.3
+    - 2.13.4
+    - 2.13.5
     - 2.13.6
-    recommended: 2.13.6
+    recommended: 2.12.4
     deprecated: []
   dependencies: []
   resolvedDependencies: []
@@ -331,7 +337,7 @@ m_ResolvedPackages:
     revision: 97d7bcda7c50ada1e2c23816e56b8c315dcd6eae
     path: 
   unityLifecycle:
-    version: 2.13.6
+    version: 2.12.4
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -392,7 +398,7 @@ m_ResolvedPackages:
   fingerprint: 4628d2ba6ea45aaa16a8b78239d0f6f9c2176982
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 2.13.6
+    minimumPackageVersion: 2.12.4
     minimumUnityVersion: 6000.0
   compliance:
     status: 0
@@ -762,9 +768,10 @@ m_ResolvedPackages:
     - 1.20.0
     - 1.20.1
     compatible:
+    - 1.19.0
     - 1.20.0
     - 1.20.1
-    recommended: 1.20.1
+    recommended: 1.19.0
     deprecated: []
   dependencies:
   - name: com.unity.modules.uielements
@@ -815,7 +822,7 @@ m_ResolvedPackages:
     revision: 27757ebb14c0659ce1dbe39822ce97b33adea6c9
     path: 
   unityLifecycle:
-    version: 1.20.0
+    version: 1.19.0
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -890,7 +897,7 @@ m_ResolvedPackages:
   fingerprint: 7a4e1a2a81941121ffc0721a14009b46299dada1
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 1.20.0
+    minimumPackageVersion: 1.19.0
     minimumUnityVersion: 6000.0
   compliance:
     status: 0
@@ -1010,7 +1017,7 @@ m_ResolvedPackages:
   isDirectDependency: 1
   version: 17.3.0
   source: 2
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.render-pipelines.universal@746735fb06f2"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.render-pipelines.universal@35356061dd01"
   assetPath: Packages/com.unity.render-pipelines.universal
   name: com.unity.render-pipelines.universal
   displayName: Universal Render Pipeline
@@ -1043,7 +1050,7 @@ m_ResolvedPackages:
   - name: com.unity.render-pipelines.core
     version: 17.3.0
   - name: com.unity.burst
-    version: 1.8.30
+    version: 1.8.29
   - name: com.unity.mathematics
     version: 1.3.3
   - name: com.unity.modules.jsonserialize
@@ -1055,7 +1062,7 @@ m_ResolvedPackages:
   - name: com.unity.modules.imgui
     version: 1.0.0
   - name: com.unity.collections
-    version: 2.6.8
+    version: 2.6.6
   - name: com.unity.test-framework
     version: 1.6.0
   - name: com.unity.ext.nunit
@@ -1071,7 +1078,7 @@ m_ResolvedPackages:
   - name: com.unity.shadergraph
     version: 17.3.0
   - name: com.unity.searcher
-    version: 4.9.5
+    version: 4.9.4
   - name: com.unity.render-pipelines.universal-config
     version: 17.0.3
   keywords:
@@ -1130,7 +1137,7 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: 746735fb06f27d44d2a1d5087ed54397a8863d22
+  fingerprint: 35356061dd015c558f2a38860d000e98da1fb282
   editorCompatibility:
     compatibilityLevel: 0
     minimumPackageVersion: 17.3.0
@@ -1146,7 +1153,7 @@ m_ResolvedPackages:
   isDirectDependency: 1
   version: 1.6.0
   source: 2
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.test-framework@bd7f943e9647"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.test-framework@ecf40a72f8c1"
   assetPath: Packages/com.unity.test-framework
   name: com.unity.test-framework
   displayName: Test Framework
@@ -1231,7 +1238,7 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: bd7f943e964734fe159ef03827ee64a0ab725741
+  fingerprint: ecf40a72f8c1c547313b13904fdcb64f1c114e00
   editorCompatibility:
     compatibilityLevel: 0
     minimumPackageVersion: 1.6.0
@@ -1356,6 +1363,7 @@ m_ResolvedPackages:
     - 1.8.12
     - 1.8.13
     compatible:
+    - 1.8.12
     - 1.8.13
     recommended: 1.8.13
     deprecated: []
@@ -1407,7 +1415,7 @@ m_ResolvedPackages:
     revision: 7212b974a58951dfb2fe3dd5e0e85fa25eda823f
     path: 
   unityLifecycle:
-    version: 1.8.13
+    version: 1.8.12
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -1448,7 +1456,7 @@ m_ResolvedPackages:
   fingerprint: 3a22918286f51d73dd374b3f8051050ab2ab08ac
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 1.8.13
+    minimumPackageVersion: 1.8.12
     minimumUnityVersion: 6000.0
   compliance:
     status: 0
@@ -1461,7 +1469,7 @@ m_ResolvedPackages:
   isDirectDependency: 1
   version: 2.0.0
   source: 2
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.ugui@0e6b3c20b946"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.ugui@2e4da8434a5c"
   assetPath: Packages/com.unity.ugui
   name: com.unity.ugui
   displayName: uGUI
@@ -1552,7 +1560,7 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: 0e6b3c20b9465c419d77f9b228cde16f5c94adbd
+  fingerprint: 2e4da8434a5c1bf6c95e7249f9368e3dfcdff118
   editorCompatibility:
     compatibilityLevel: 0
     minimumPackageVersion: 2.0.0
@@ -1623,6 +1631,7 @@ m_ResolvedPackages:
     - 1.9.11
     - 1.9.12
     compatible:
+    - 1.9.11
     - 1.9.12
     recommended: 1.9.12
     deprecated:
@@ -1666,7 +1675,7 @@ m_ResolvedPackages:
     revision: c48fbffda45c8651be75bab8fb3e25a835e12ef2
     path: 
   unityLifecycle:
-    version: 1.9.12
+    version: 1.9.11
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -1699,7 +1708,7 @@ m_ResolvedPackages:
   fingerprint: 4edfcc09512f786fe1a7f50476d320b36dab9676
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 1.9.12
+    minimumPackageVersion: 1.9.11
     minimumUnityVersion: 6000.0
   compliance:
     status: 0
@@ -5144,7 +5153,7 @@ m_ResolvedPackages:
   isDirectDependency: 0
   version: 17.3.0
   source: 2
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.render-pipelines.core@9e589b64c45d"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.render-pipelines.core@43eeb73e554f"
   assetPath: Packages/com.unity.render-pipelines.core
   name: com.unity.render-pipelines.core
   displayName: Scriptable Render Pipeline Core
@@ -5186,7 +5195,7 @@ m_ResolvedPackages:
     version: 1.0.0
   resolvedDependencies:
   - name: com.unity.burst
-    version: 1.8.30
+    version: 1.8.29
   - name: com.unity.mathematics
     version: 1.3.3
   - name: com.unity.modules.jsonserialize
@@ -5198,7 +5207,7 @@ m_ResolvedPackages:
   - name: com.unity.modules.imgui
     version: 1.0.0
   - name: com.unity.collections
-    version: 2.6.8
+    version: 2.6.6
   - name: com.unity.test-framework
     version: 1.6.0
   - name: com.unity.ext.nunit
@@ -5261,7 +5270,7 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: 9e589b64c45d7062bf56c7431a9964f8c27be56a
+  fingerprint: 43eeb73e554fe71841a157d31351ef10695836e2
   editorCompatibility:
     compatibilityLevel: 0
     minimumPackageVersion: 17.3.0
@@ -5277,7 +5286,7 @@ m_ResolvedPackages:
   isDirectDependency: 0
   version: 17.3.0
   source: 2
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.shadergraph@9b839d46559e"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.shadergraph@2b401d56d4b3"
   assetPath: Packages/com.unity.shadergraph
   name: com.unity.shadergraph
   displayName: Shader Graph
@@ -5304,12 +5313,12 @@ m_ResolvedPackages:
   - name: com.unity.render-pipelines.core
     version: 17.3.0
   - name: com.unity.searcher
-    version: 4.9.5
+    version: 4.9.3
   resolvedDependencies:
   - name: com.unity.render-pipelines.core
     version: 17.3.0
   - name: com.unity.burst
-    version: 1.8.30
+    version: 1.8.29
   - name: com.unity.mathematics
     version: 1.3.3
   - name: com.unity.modules.jsonserialize
@@ -5321,7 +5330,7 @@ m_ResolvedPackages:
   - name: com.unity.modules.imgui
     version: 1.0.0
   - name: com.unity.collections
-    version: 2.6.8
+    version: 2.6.6
   - name: com.unity.test-framework
     version: 1.6.0
   - name: com.unity.ext.nunit
@@ -5335,7 +5344,7 @@ m_ResolvedPackages:
   - name: com.unity.modules.terrain
     version: 1.0.0
   - name: com.unity.searcher
-    version: 4.9.5
+    version: 4.9.4
   keywords: []
   registry:
     id: main
@@ -5386,7 +5395,7 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: 9b839d46559ef7be37609bb36e1dcdb7a85f3a0a
+  fingerprint: 2b401d56d4b3f5fae7d54cb7b3fbf9f4bd85a131
   editorCompatibility:
     compatibilityLevel: 0
     minimumPackageVersion: 17.3.0
@@ -5428,7 +5437,7 @@ m_ResolvedPackages:
   - name: com.unity.render-pipelines.core
     version: 17.3.0
   - name: com.unity.burst
-    version: 1.8.30
+    version: 1.8.29
   - name: com.unity.mathematics
     version: 1.3.3
   - name: com.unity.modules.jsonserialize
@@ -5440,7 +5449,7 @@ m_ResolvedPackages:
   - name: com.unity.modules.imgui
     version: 1.0.0
   - name: com.unity.collections
-    version: 2.6.8
+    version: 2.6.6
   - name: com.unity.test-framework
     version: 1.6.0
   - name: com.unity.ext.nunit
@@ -5514,12 +5523,12 @@ m_ResolvedPackages:
       scopePatternExpression: 
       message: 
       readMoreLink: 
-- packageId: com.unity.searcher@4.9.5
+- packageId: com.unity.searcher@4.9.4
   testable: 0
   isDirectDependency: 0
-  version: 4.9.5
+  version: 4.9.4
   source: 1
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.searcher@a463122f2c00"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.searcher@d45a78918735"
   assetPath: Packages/com.unity.searcher
   name: com.unity.searcher
   displayName: Searcher
@@ -5554,6 +5563,7 @@ m_ResolvedPackages:
     - 4.9.4
     - 4.9.5
     compatible:
+    - 4.9.4
     - 4.9.5
     recommended: 4.9.5
     deprecated: []
@@ -5577,16 +5587,16 @@ m_ResolvedPackages:
   entitlements:
     licensingModel: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 639204946223360000
+  datePublishedTicks: 638965670878140000
   documentationUrl: https://docs.unity3d.com/Packages/com.unity.searcher@4.9/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/com.unity.searcher.git
-    revision: e72cb042d767a07688d186a1e80f7d2d7e5de87f
+    revision: 6fad693b6604ae7175b59ebb4990d9a0b6c1d012
     path: 
   unityLifecycle:
-    version: 4.9.5
+    version: 4.9.4
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -5597,8 +5607,8 @@ m_ResolvedPackages:
   git:
     hash: 
     revision: 
-  upmReserved: '{"changelog":"- Update minimum Editor version to 6000.0\n- Fixed
-    spaces disappearing between highlighted matches in search results (UUM-146469)."}'
+  upmReserved: '{"changelog":"- Fixed a bug where spaces are removed when highlighted.\n-
+    Changed VisualSplitter to twoPaneSplitView and updated indentation"}'
   signature:
     status: 1
     reason: Signature is ok
@@ -5612,23 +5622,23 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: a463122f2c00f83398f41790942a0793431e70ea
+  fingerprint: d45a78918735dd5b1de2247c6e3567c60aa24115
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 4.9.5
-    minimumUnityVersion: 6000.0
+    minimumPackageVersion: 4.9.4
+    minimumUnityVersion: 2019.1
   compliance:
     status: 0
     violation:
       scopePatternExpression: 
       message: 
       readMoreLink: 
-- packageId: com.unity.burst@1.8.30
+- packageId: com.unity.burst@1.8.29
   testable: 0
   isDirectDependency: 0
-  version: 1.8.30
+  version: 1.8.29
   source: 1
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.burst@2f3d916873ea"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.burst@6bb9aca3ef38"
   assetPath: Packages/com.unity.burst
   name: com.unity.burst
   displayName: Burst
@@ -5790,6 +5800,7 @@ m_ResolvedPackages:
     - 1.8.30
     - 1.8.31
     compatible:
+    - 1.8.29
     - 1.8.30
     - 1.8.31
     recommended: 1.8.31
@@ -5820,16 +5831,16 @@ m_ResolvedPackages:
   entitlements:
     licensingModel: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 639202444216000000
+  datePublishedTicks: 639104670059890000
   documentationUrl: https://docs.unity3d.com/Packages/com.unity.burst@1.8/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/burst.git
-    revision: bb334e47fbfa51086ada3fd51da8446e89853b1e
+    revision: ec0b605f793ec0a6605b712855ffbf1b97dedd08
     path: 
   unityLifecycle:
-    version: 1.8.30
+    version: 1.8.29
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -5840,34 +5851,12 @@ m_ResolvedPackages:
   git:
     hash: 
     revision: 
-  upmReserved: "{\"changelog\":\"### Fixed\\n- Fix error while verifying module from
-    invalid bitcast when converting nunit to float or double.\\n- Fixed cases where
-    the Burst Inspector could jitter when moving the divider.\\n- Fixed that using
-    a Bursted function pointer as argument to a method directly could cause a compiler
-    error\\n- Fixed Burst AOT builds for Embedded Linux and QNX when using Build
-    Profiles: Burst now reads the active profile\u2019s architecture instead of a
-    stale editor setting, preventing sysroot/linker failures (e.g. x64 SDK with aarch64
-    target) in batchmode and CI.\\n- Atomics were not generated when target web platform
-    with threading enabled.\\n- Fixed a race between Burst and the Editor compilation
-    pipeline that could surface as a `Failed to find entry-points` error.\\n- Burst
-    could crash if Very Large static readonly data happened to be compiled in such
-    a way that it would result in a direct store of the array. Now, the very large
-    data is memmoved instead.\\n- Web Player would crash if targeting wasm and the
-    entities package is present.\\n- Very large constants could cause Burst to crash
-    when compiling for WebAssembly\\n\\n### Changed\\n- Changed the default LLVM
-    version to 21.\\n- The minimum required Linux version to use Burst in the Unity
-    Editor is now Ubuntu 18.04 or equivalent.\\n- Changed minimum Editor version
-    to 6.0\\n- `[IgnoreWarning(1371)]` applied to a `[BurstDiscard]` method now suppresses
-    the discarded-call warning for the calls discarded along with it, instead of
-    having to annotate every caller.\\n\\n### Removed\\n- Removed support for LLVM
-    10, 15, 16, 17.\\n\\n### Known Issues\\n- Windows Smart App Control or WDAC policies
-    may block JIT-compiled libraries at load time. Burst now logs a warning in such
-    cases and deletes the affected library, which will be recompiled so Burst can
-    attempt loading it again.\\n\\n### Added\\n- Support for Wasm64 target\\n- Added
-    `ButtonFlowNewLineTest` editor test to verify that the Burst Inspector button
-    bar wraps to a new line when the window is narrow, and fits on a single line
-    when the window is wide.\\n- Added a Restart Now button to the dialog shown when
-    the Burst package is removed or updated.\"}"
+  upmReserved: '{"changelog":"### Fixed\n- Fixed that types implementing interfaces
+    that define methods with the same name (like `IFoo.Run()` and `IBar.Run()`) would
+    cause Burst to always only pick one of them when resolving calls to either.\n-
+    Fixed cases where Burst could be stripped from player builds with high managed
+    stripping enabled when Burst is only used through the `[BurstCompile]` attribute.\n\n###
+    Changed\n- Updated Burst''s internal version of Cecil."}'
   signature:
     status: 1
     reason: Signature is ok
@@ -5881,11 +5870,11 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: 2f3d916873ea867ff077372df3fe42447ba7d4c6
+  fingerprint: 6bb9aca3ef382e98bd0c1e4ab5fc74380c16095f
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 1.8.30
-    minimumUnityVersion: 6000.0
+    minimumPackageVersion: 1.8.29
+    minimumUnityVersion: 2022.3
   compliance:
     status: 0
     violation:
@@ -6003,12 +5992,12 @@ m_ResolvedPackages:
       scopePatternExpression: 
       message: 
       readMoreLink: 
-- packageId: com.unity.collections@2.6.8
+- packageId: com.unity.collections@2.6.6
   testable: 0
   isDirectDependency: 0
-  version: 2.6.8
+  version: 2.6.6
   source: 1
-  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.collections@84e8eb3fc12e"
+  resolvedPath: "C:\\Github\\GraduationWork-\\GraduationWork\u2161\\Library\\PackageCache\\com.unity.collections@9796e5ee0d9e"
   assetPath: Packages/com.unity.collections
   name: com.unity.collections
   displayName: Collections
@@ -6109,13 +6098,15 @@ m_ResolvedPackages:
     - 2.6.8
     - 2.7.1
     compatible:
+    - 2.6.6
+    - 2.6.7
     - 2.6.8
     - 2.7.1
     recommended: 2.6.8
     deprecated: []
   dependencies:
   - name: com.unity.burst
-    version: 1.8.29
+    version: 1.8.28
   - name: com.unity.mathematics
     version: 1.3.2
   - name: com.unity.test-framework
@@ -6126,7 +6117,7 @@ m_ResolvedPackages:
     version: 3.0.3
   resolvedDependencies:
   - name: com.unity.burst
-    version: 1.8.30
+    version: 1.8.29
   - name: com.unity.mathematics
     version: 1.3.3
   - name: com.unity.modules.jsonserialize
@@ -6160,16 +6151,16 @@ m_ResolvedPackages:
   entitlements:
     licensingModel: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 639198054273250000
+  datePublishedTicks: 639126363706650000
   documentationUrl: https://docs.unity3d.com/Packages/com.unity.collections@2.6/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/dots.git
-    revision: 4a34d600ff4a191ed22ac899ab955d96d7c683f7
+    revision: 233b7df164f9829fad832775f3875c0379155347
     path: 
   unityLifecycle:
-    version: 2.6.8
+    version: 2.6.6
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -6180,11 +6171,10 @@ m_ResolvedPackages:
   git:
     hash: 
     revision: 
-  upmReserved: '{"changelog":"### Changed\n\n* Updated the `com.unity.entities` dependency
-    to version `1.4.8`\n\n### Removed\n\n* Removed the `System.IO.Hashing.dll` and
-    `System.Runtime.CompilerServices.Unsafe.dll` precompiled assemblies from the
-    package. This avoids compile errors that could occur if those DLLs were included
-    multiple times in a project."}'
+  upmReserved: '{"changelog":"### Changed\n\n* Updated the `com.unity.burst` dependency
+    to version `1.8.28`\n\n\n### Fixed\n\n* NativeBitArray and UnsafeBitArray now
+    correctly find contiguous sequences of 0-bits up to 6 bits in length.\n\n###
+    Security"}'
   signature:
     status: 1
     reason: Signature is ok
@@ -6198,10 +6188,10 @@ m_ResolvedPackages:
     errorCode: 
   assetStore:
     productId: 
-  fingerprint: 84e8eb3fc12e12e29c3b3d102c904e2f8f2ca6e5
+  fingerprint: 9796e5ee0d9ef6933fcf11656c00048965f09994
   editorCompatibility:
     compatibilityLevel: 0
-    minimumPackageVersion: 2.6.8
+    minimumPackageVersion: 2.6.6
     minimumUnityVersion: 2022.3.20f1
   compliance:
     status: 0
@@ -6479,4 +6469,4 @@ m_ResolvedPackages:
       scopePatternExpression: 
       message: 
       readMoreLink: 
-m_BuiltInPackagesHash: a01e245416cb3fed26dd4bdb86afadd7b471e24c
+m_BuiltInPackagesHash: 879b9e845a9f3bca32aab118e36cc1d23cb262fa
