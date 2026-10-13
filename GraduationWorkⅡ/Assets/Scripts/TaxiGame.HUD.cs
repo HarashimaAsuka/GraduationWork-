@@ -76,7 +76,7 @@ namespace ShoryoumaTaxi
 
             // --- 上中央：行灯（空車／賃走）---
             bool up = want > 0;
-            string sign = carrying && goal != null ? $"賃走　{goal.name}まで　{(up ? "▲上り" : "▼下り")}" : $"空車　お客さんを探す　{(up ? "▲上り" : "▼下り")}";
+            string sign = carrying && goal != null ? $"賃走　{goal.goalName}まで　{(up ? "▲上り" : "▼下り")}" : $"空車　お客さんを探す　{(up ? "▲上り" : "▼下り")}";
             var sc = carrying ? cHire : cFree;
             float sw = Mathf.Min(520, W - 2 * (gw + 40));
             var sr = new Rect((W - sw) / 2, 12, sw, 40);
