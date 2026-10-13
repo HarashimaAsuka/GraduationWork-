@@ -5,16 +5,16 @@ m_ProjectFiles:
     m_ContentTrackingEnabled: 1
     m_ModificationDate:
       serializedVersion: 2
-      ticks: 639274651867823630
-    m_Hash: 4119611148
+      ticks: 639274763181624766
+    m_Hash: 4204681492
   m_LockFileStatus:
     m_FilePath: "C:/Github/GraduationWork-/GraduationWork\u2161/Packages/packages-lock.json"
     m_PathExists: 1
     m_ContentTrackingEnabled: 1
     m_ModificationDate:
       serializedVersion: 2
-      ticks: 639274720134416825
-    m_Hash: 2976249563
+      ticks: 639274763181634744
+    m_Hash: 2683669931
 m_EmbeddedPackageManifests:
   m_ManifestsStatus: {}
 m_LocalPackages:
