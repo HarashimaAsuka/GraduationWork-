@@ -9,7 +9,7 @@ namespace ShoryoumaTaxi
     public class Sfx
     {
         readonly AudioSource src;
-        public AudioClip salt, pop, hit, catchSilk, hurt, bell, swap;
+        public AudioClip salt, pop, hit, catchSilk, hurt, bell, swap, call;
 
         public Sfx(GameObject host)
         {
@@ -22,6 +22,7 @@ namespace ShoryoumaTaxi
             hurt = Tone(200, 50, 0.3f, Wave.Saw, 0.4f);
             swap = Tone(900, 300, 0.35f, Wave.Saw, 0.3f);
             bell = Bell();
+            call = Call();
         }
 
         public void Play(AudioClip c, float vol = 1f) { if (c != null) src.PlayOneShot(c, vol); }
@@ -46,6 +47,23 @@ namespace ShoryoumaTaxi
                 data[i] = s * gain * Mathf.Pow(1f - t, 2f);
             }
             var clip = AudioClip.Create("tone", n, 1, rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>声の知らせ：短い「ピピッ」</summary>
+        static AudioClip Call()
+        {
+            int rate = 44100, n = Mathf.CeilToInt(rate * 0.17f), b = Mathf.CeilToInt(rate * 0.07f), gap = Mathf.CeilToInt(rate * 0.09f);
+            var data = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                int j = i < b ? i : i - gap;
+                if (j < 0 || j >= b) continue;
+                float t = (float)j / b, f = 1250f * Mathf.Pow(1500f / 1250f, t);
+                data[i] = Mathf.Sin(2 * Mathf.PI * f * j / rate) * 0.3f * (1 - t) * (i < b ? 1f : 0.8f);
+            }
+            var clip = AudioClip.Create("call", n, 1, rate, false);
             clip.SetData(data, 0);
             return clip;
         }

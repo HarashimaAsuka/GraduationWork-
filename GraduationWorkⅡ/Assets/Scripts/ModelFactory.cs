@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+using Random = UnityEngine.Random;   // System.Random と取り違えないように
 
 namespace ShoryoumaTaxi
 {
@@ -16,6 +18,12 @@ namespace ShoryoumaTaxi
         public static Material ZakuroMat, ZakuroRipeMat, ArilMat, SepalMat, HornMat;
         public static Material HozukiMat, BerryMat, TongueMat, SpatheMat;
         public static Material CucumberMat, NasuMat, SoulMat, SeedMat, SaltMat, OnibiMat;
+        /// <summary>お客さんの魂の色。0=ふつう（水色） 1=珍しい（紫） 2=とても珍しい（金）</summary>
+        public static Material[] SoulMats;
+        /// <summary>ふんわり光る板（グロー）用。Sprites/Default に放射状のグラデーションを貼る。</summary>
+        public static Texture2D GlowTex;
+        public static Material SoulHaloMat, GoldGlowMat, AuraMat;
+        static readonly Dictionary<string, Material[]> shadowMats = new Dictionary<string, Material[]>();
 
         public static void Init()
         {
@@ -34,6 +42,18 @@ namespace ShoryoumaTaxi
             CucumberMat = Mats.Lit(new Color(0.37f, 0.61f, 0.25f), 0.45f);
             NasuMat = Mats.Lit(new Color(0.23f, 0.12f, 0.37f), 0.85f);
             SoulMat = Mats.Lit(new Color(0.9f, 0.96f, 1f), 0.6f, new Color(0.35f, 0.75f, 1f));
+            SoulMats = new[] {
+                SoulMat,
+                Mats.Lit(new Color(0.95f, 0.89f, 1f), 0.6f, new Color(0.62f, 0.44f, 1f)),
+                Mats.Lit(new Color(1f, 0.95f, 0.75f), 0.6f, new Color(1f, 0.72f, 0.13f)),
+            };
+            GlowTex = RadialTex(64);
+            SoulHaloMat = GlowMat(new Color(0.56f, 0.86f, 1f, 0.6f));
+            GoldGlowMat = GlowMat(new Color(1f, 0.82f, 0.38f, 0.75f));
+            AuraMat = GlowMat(new Color(1f, 0.23f, 0.16f, 0.75f));
+            shadowMats.Clear();
+            foreach (var k in new[] { "zakuro", "hozuki", "tongue", "soul" })
+                shadowMats[k] = new[] { TexMat(Silhouette(k, true)), TexMat(Silhouette(k, false)) };
             SeedMat = Mats.Lit(new Color(1f, 0.18f, 0.33f), 0.85f, new Color(0.6f, 0f, 0.15f));
             SaltMat = Mats.Unlit(Color.white);
             OnibiMat = Mats.Unlit(new Color(0.55f, 0.82f, 1f));
@@ -152,18 +172,199 @@ namespace ShoryoumaTaxi
         }
 
         // ---------- お客さん ----------
-        public static GameObject Soul(GameObject prefab)
+        /// <summary>魂。rare で体の色が変わり、2（とても珍しい）は金色に光る。</summary>
+        public static GameObject Soul(GameObject prefab, int rare = 0)
         {
             var g = Root("魂", prefab);
             if (prefab != null) return g;
             var t = g.transform;
-            MeshObj("body", soulMesh, t, SoulMat, Vector3.zero, Vector3.one);
+            MeshObj("body", soulMesh, t, SoulMats[Mathf.Clamp(rare, 0, 2)], Vector3.zero, Vector3.one);
+            // 後ろの光（カメラから見て体の奥）
+            Prim(PrimitiveType.Quad, t, new Vector3(0, 0, -0.3f), Vector3.one * 3.4f, SoulHaloMat).name = "halo";
+            var gold = Prim(PrimitiveType.Quad, t, new Vector3(0, 0, -0.35f), Vector3.one * 5f, GoldGlowMat);
+            gold.name = "gold"; gold.SetActive(rare == 2);
             var face = Mats.Unlit(new Color(0.1f, 0.16f, 0.25f));
             foreach (int sd in new[] { -1, 1 })
                 Prim(PrimitiveType.Sphere, t, new Vector3(sd * 0.17f, 0.06f, 0.53f), new Vector3(0.12f, 0.18f, 0.08f), face);
             Prim(PrimitiveType.Cube, t, new Vector3(0, -0.12f, 0.55f), new Vector3(0.16f, 0.035f, 0.04f), face);
             // 天冠（額の白い三角）
             MeshObj("tenkan", MeshKit.Cone(0.17f, 0.22f, 3), t, Mats.Unlit(Color.white), new Vector3(0, 0.3f, 0.5f), new Vector3(1f, 1f, 0.15f), new Vector3(0, 30f, 0));
+            return g;
+        }
+
+        /// <summary>作った魂の色を変える（背中に乗せるお客さんの切り替え用）。</summary>
+        public static void SetSoulRare(GameObject g, int rare)
+        {
+            var body = g.transform.Find("body");
+            if (body != null) body.GetComponent<Renderer>().sharedMaterial = SoulMats[Mathf.Clamp(rare, 0, 2)];
+            var gold = g.transform.Find("gold");
+            if (gold != null) gold.gameObject.SetActive(rare == 2);
+        }
+
+        // ---------- 光・影のテクスチャ ----------
+        static Material TexMat(Texture2D tex)
+        {
+            var m = Mats.VertexColor();
+            m.mainTexture = tex;
+            return m;
+        }
+
+        /// <summary>色付きのグロー用マテリアル（板に貼る）。</summary>
+        public static Material GlowMat(Color c)
+        {
+            var m = TexMat(GlowTex);
+            m.SetColor("_Color", c); m.SetColor("_BaseColor", c);
+            return m;
+        }
+
+        /// <summary>光る板を1枚つける。板は親の XY 平面にあり、Sprites/Default は裏表なく描かれる。</summary>
+        public static GameObject Glow(Transform parent, Material m, float size, Vector3 pos)
+        {
+            var g = Prim(PrimitiveType.Quad, parent, pos, Vector3.one * size, m);
+            g.name = "glow";
+            return g;
+        }
+
+        static Texture2D RadialTex(int n)
+        {
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = (x + 0.5f) / n * 2 - 1, dy = (y + 0.5f) / n * 2 - 1;
+                    float d = Mathf.Clamp01(Mathf.Sqrt(dx * dx + dy * dy));
+                    float a = Mathf.Pow(1 - d, 2.2f);
+                    px[y * n + x] = new Color(1, 1, 1, a);
+                }
+            tex.SetPixels(px); tex.Apply();
+            return tex;
+        }
+
+        /// <summary>
+        /// 下りの「影」のテクスチャ（128x128）。地獄の火に下から照らされて、牛の手前に映る影。
+        /// 敵は赤い縁取りの黒い影、魂は水色に光る影。soft はぼやけた大きい層。
+        /// </summary>
+        public static Material ShadowMat(string type, bool soft)
+        {
+            if (!shadowMats.TryGetValue(type, out var pair)) pair = shadowMats["zakuro"];
+            return soft ? pair[0] : pair[1];
+        }
+
+        static Texture2D Silhouette(string type, bool soft)
+        {
+            const int N = 128;
+            var mask = new float[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                    mask[y * N + x] = InShape(type, x + 0.5f, y + 0.5f) ? 1f : 0f;
+            bool soul = type == "soul";
+            var halo = Blur(mask, N, soft ? 14 : 5);
+            var core = soft ? Blur(mask, N, 9) : mask;
+            Color hc = soul ? new Color(150 / 255f, 225 / 255f, 1f) : new Color(1f, 90 / 255f, 40 / 255f);
+            Color cc = soul ? new Color(235 / 255f, 250 / 255f, 1f) : new Color(12 / 255f, 0, 4 / 255f);
+            var px = new Color[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    int i = y * N + x;
+                    float ha = halo[i] * 0.95f, ca = core[i];
+                    float oa = ca + ha * (1 - ca);
+                    Color rgb = oa > 0.0001f ? (cc * ca + hc * (ha * (1 - ca))) / oa : hc;
+                    // キャンバスは上が y=0。テクスチャは下が 0 なので上下を入れ替える
+                    px[(N - 1 - y) * N + x] = new Color(rgb.r, rgb.g, rgb.b, oa);
+                }
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            tex.SetPixels(px); tex.Apply();
+            return tex;
+        }
+
+        /// <summary>影の形（キャンバス座標：左上原点、128x128）。</summary>
+        static bool InShape(string type, float x, float y)
+        {
+            bool Ell(float cx, float cy, float rx, float ry) { float a = (x - cx) / rx, b = (y - cy) / ry; return a * a + b * b <= 1; }
+            bool Poly(params float[] p)
+            {
+                bool inside = false;
+                for (int i = 0, j = p.Length / 2 - 1; i < p.Length / 2; j = i++)
+                {
+                    float xi = p[i * 2], yi = p[i * 2 + 1], xj = p[j * 2], yj = p[j * 2 + 1];
+                    if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+                }
+                return inside;
+            }
+            switch (type)
+            {
+                case "zakuro":
+                    return Ell(64, 76, 36, 36)
+                        || Poly(44, 46, 48, 26, 52, 44, 56, 26, 60, 44, 64, 26, 68, 44, 72, 26, 76, 44, 80, 26, 84, 44)
+                        || Poly(34, 52, 22, 24, 44, 44) || Poly(94, 52, 106, 24, 84, 44);
+                case "hozuki":
+                    return Ell(64, 70, 32, 42) || (x >= 60 && x <= 68 && y >= 14 && y <= 32);
+                case "tongue":
+                    return Ell(64, 94, 54, 28) || Poly(50, 80, 64, 8, 78, 80);
+                default:   // 魂：丸い頭と、下に伸びるしっぽ
+                    if (Ell(64, 50, 28, 28)) return true;
+                    if (x < 37 || x > 91) return false;
+                    float t = (x - 37) / 54f;
+                    return y >= 58 && y <= 58 + 160 * t * (1 - t);
+            }
+        }
+
+        /// <summary>箱ぼかしを3回かけて、ガウスぼかしの代わりにする。</summary>
+        static float[] Blur(float[] src, int n, int r)
+        {
+            var a = (float[])src.Clone(); var b = new float[a.Length];
+            for (int pass = 0; pass < 3; pass++)
+            {
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float s = 0; int c = 0;
+                        for (int k = -r; k <= r; k++) { int xx = x + k; if (xx < 0 || xx >= n) continue; s += a[y * n + xx]; c++; }
+                        b[y * n + x] = s / c;
+                    }
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float s = 0; int c = 0;
+                        for (int k = -r; k <= r; k++) { int yy = y + k; if (yy < 0 || yy >= n) continue; s += b[yy * n + x]; c++; }
+                        a[y * n + x] = s / c;
+                    }
+            }
+            return a;
+        }
+
+        // ---------- 社名入りの行灯（売店の飾り） ----------
+        /// <summary>背中に立てる提灯。text に社名を縦書き（1文字ずつ改行）で入れる。</summary>
+        public static GameObject SignLamp(Font font, out TextMesh text)
+        {
+            var g = new GameObject("社名入りの行灯");
+            const int W = 64, H = 128;
+            var tex = new Texture2D(W, H, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color[W * H];
+            Color edge = new Color(0.91f, 0.54f, 0.23f), mid = new Color(1f, 0.89f, 0.69f), bar = new Color(0.16f, 0.1f, 0.08f);
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    float cx = (x + 0.5f) / W * 2 - 1, cy = (y + 0.5f) / H * 2 - 1;
+                    Color c = new Color(0, 0, 0, 0);
+                    if (cx * cx / 0.85f + cy * cy / 0.82f <= 1) { c = Color.Lerp(edge, mid, 1 - Mathf.Abs(cx)); c.a = 1; }
+                    if (Mathf.Abs(cx) < 0.53f && (Mathf.Abs(cy - 0.84f) < 0.07f || Mathf.Abs(cy + 0.84f) < 0.07f)) c = bar;
+                    px[y * W + x] = c;
+                }
+            tex.SetPixels(px); tex.Apply();
+            var quad = Prim(PrimitiveType.Quad, g.transform, Vector3.zero, new Vector3(0.55f, 1.1f, 1f), TexMat(tex));
+            quad.name = "paper";
+
+            var tg = new GameObject("name");
+            tg.transform.SetParent(g.transform, false);
+            tg.transform.localPosition = new Vector3(0, 0, -0.02f);
+            text = tg.AddComponent<TextMesh>();
+            text.font = font; text.fontSize = 48; text.characterSize = 0.022f; text.lineSpacing = 0.85f;
+            text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center;
+            text.color = new Color(0.7f, 0.15f, 0.12f);
+            tg.GetComponent<MeshRenderer>().sharedMaterial = font.material;
             return g;
         }
 
