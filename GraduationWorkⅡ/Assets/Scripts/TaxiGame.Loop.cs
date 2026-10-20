@@ -55,22 +55,10 @@ namespace ShoryoumaTaxi
             if (want < 0 && y < 30) TurnAround(false);
 
             // --- 移動：画面の右・上に合わせて動かす ---
-            Vector2 mv = GameInput.Move();
-            float sp = go ? 6.5f : 3.8f;
-            Vector3 d3 = (cam.transform.right * mv.x + cam.transform.up * mv.y) * sp * dt;
-            px += d3.x; pz += d3.z;
-            if (mouseFollow && mv == Vector2.zero)
-            {
-                var ray = cam.ScreenPointToRay(GameInput.MousePosition());
-                var pl = new Plane(Vector3.up, new Vector3(0, y, 0));
-                if (pl.Raycast(ray, out float enter))
-                {
-                    var h = ray.GetPoint(enter);
-                    float dx = h.x - px, dz = h.z - pz, d = Mathf.Sqrt(dx * dx + dz * dz), cap = (go ? 9 : 4.8f) * dt;
-                    if (d > 0.01f) { float q = Mathf.Min(1, cap / d); px += dx * q; pz += dz * q; }
-                }
-            }
-            KeepIn();
+            
+            playerController.Move(
+                ref px, ref pz, cam, y,
+                mouseFollow, go, dt, RX, RZ);  
 
             // --- 糸と塩（塩は上りだけ）---
             bool wantWeb = GameInput.Guard();
@@ -80,10 +68,12 @@ namespace ShoryoumaTaxi
             silk = Mathf.Clamp(silk + (guarding ? -20 : 28) * dt, 0, 100);
             if (GameInput.Fire() && !guarding && cool <= 0 && dir > 0 && want > 0)
             {
-                var g = GameObject.CreatePrimitive(PrimitiveType.Cube); Destroy(g.GetComponent<Collider>());
-                g.GetComponent<Renderer>().sharedMaterial = ModelFactory.SaltMat; g.transform.localScale = Vector3.one * 0.16f;
-                salts.Add(new Salt { go = g, x = px + R(-0.05f, 0.05f), y = y + dir * 0.8f, z = pz + R(-0.05f, 0.05f), yp = y, rot = R(0, 360) });
-                fired++; water -= saltCost; cool = 0.14f; sfx.Play(sfx.salt, 0.6f);
+                projectileManager.CreateSalt(px, y, pz, dir);
+
+                fired++;
+                water -= saltCost;
+                cool = 0.14f;
+                sfx.Play(sfx.salt, 0.6f);
             }
 
             float camY = cam.transform.position.y, gapNow = Mathf.Max(3, y - camY);
@@ -211,19 +201,10 @@ namespace ShoryoumaTaxi
 
         void Fire(Enemy e, float d, float V)
         {
-            void Aim(float vs, float ox, float oz, bool onibi)
-            {
-                float time = d / (vs + V), lead = e.ripe ? 0.85f : 0.55f;
-                var g = GameObject.CreatePrimitive(PrimitiveType.Sphere); Destroy(g.GetComponent<Collider>());
-                g.GetComponent<Renderer>().sharedMaterial = onibi ? ModelFactory.OnibiMat : ModelFactory.SeedMat;
-                g.transform.localScale = Vector3.one * (onibi ? 0.7f : 0.4f);
-                shots.Add(new Shot { go = g, onibi = onibi, x = e.x, y = e.y, z = e.z,
-                    vx = (px + ox - e.x) / time * lead, vy = -dir * vs, vz = (pz + oz - e.z) / time * lead });
-            }
-            if (e.type == "zakuro") Aim(9, 0, 0, false);
-            else if (e.type == "hozuki") Aim(7, 0, 0, true);
-            else { Aim(9, 0, 0, false); Aim(9, -2.2f, 0.6f, false); Aim(9, 2.2f, -0.6f, false); }
-            if (flags.Add("webTip")) Say("右クリックでクモの糸。攻撃を受けると水分になる。", 3.8f);
+            projectileManager.CreateEnemyShots(e, d, V, dir, px, pz);
+
+            if (flags.Add("webTip"))
+                Say("右クリックでクモの糸。攻撃を受けると水分になる。", 3.8f);
         }
 
         void UpdateFlying(float dt)
@@ -312,14 +293,10 @@ namespace ShoryoumaTaxi
             // 精霊馬：上りは鼻先が奥、下りはこちらを向く。背中は常に画面の上
             bool go = dir > 0;
             float bob = go ? Mathf.Sin(step * 2) * 0.1f : Mathf.Sin(t * 1.6f) * 0.15f;
-            var tr = steed.root.transform;
-            tr.position = new Vector3(px, y + bob, pz);
-            Vector3 F = Vector3.up, U = Vector3.forward;
-            var qUp = Quaternion.LookRotation((0.7f * F + 0.71f * U).normalized, (-0.71f * F + 0.7f * U).normalized);
-            var qDown = Quaternion.LookRotation((-0.9f * F - 0.42f * U).normalized, (-0.42f * F + 0.9f * U).normalized);
-            tr.rotation = Quaternion.Slerp(qUp, qDown, bks);
-            if (go && Mathf.Abs(vel) > 3) tr.Rotate(Mathf.Sin(step) * 3.5f, 0, 0, Space.Self);
-            else if (!go) tr.Rotate(Mathf.Sin(t * 0.9f) * 6f, 0, Mathf.Sin(t * 1.3f) * 12f, Space.Self);
+            
+            Transform tr = playerController.UpdatePose(
+                px, y, pz, dir, vel, step, t, bk);
+            
             if (over) shrink = Mathf.Max(0.35f, shrink - 0.5f * dt);
             tr.localScale = Vector3.one * Mathf.Lerp(1f, 2.3f, bks) * shrink;
             steed.cucumber.transform.localScale = Vector3.one * Mathf.Max(0.001f, 1 - bks);

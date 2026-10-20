@@ -21,6 +21,9 @@ namespace ShoryoumaTaxi
         public GameObject tonguePrefab;
         public GameObject soulPrefab;
 
+        PlayerController playerController;
+        ProjectileManager projectileManager;
+
         [Header("ルール")]
         public float roadLength = 1500f;
         public int goalCount = 5;
@@ -60,8 +63,8 @@ namespace ShoryoumaTaxi
         Goal goal;
         readonly List<Enemy> enemies = new List<Enemy>();
         readonly List<Soul> souls = new List<Soul>();
-        readonly List<Shot> shots = new List<Shot>();
-        readonly List<Salt> salts = new List<Salt>();
+        List<Shot> shots => projectileManager.Shots;
+        List<Salt> salts => projectileManager.Salts;
         readonly List<Flying> flying = new List<Flying>();
         readonly Queue<Msg> msgQ = new Queue<Msg>();
         Msg? msg;
@@ -92,6 +95,7 @@ namespace ShoryoumaTaxi
             L = roadLength;
             jpFont = Font.CreateDynamicFontFromOSFont(new[] { "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Arial Unicode MS" }, 32);
             ModelFactory.Init();
+            projectileManager = new ProjectileManager();
             mpb = new MaterialPropertyBlock();
 
             cam = Camera.main;
@@ -111,6 +115,7 @@ namespace ShoryoumaTaxi
             world = new World(L);
             sfx = new Sfx(gameObject);
             steed = ModelFactory.BuildSteed(cucumberPrefab, nasuPrefab, soulPrefab);
+            playerController = new PlayerController(steed);
             gate = ModelFactory.Gate(out gateLabel, jpFont); gate.SetActive(false); gateLabel.gameObject.SetActive(false);
 
             var vc = Mats.VertexColor();
@@ -194,8 +199,9 @@ namespace ShoryoumaTaxi
         {
             foreach (var e in enemies) Destroy(e.go); enemies.Clear();
             foreach (var s in souls) Destroy(s.go); souls.Clear();
-            foreach (var s in shots) Destroy(s.go); shots.Clear();
-            foreach (var s in salts) Destroy(s.go); salts.Clear();
+            
+            projectileManager.ClearAll();
+
             foreach (var f in flying) Destroy(f.go); flying.Clear();
             air.Clear(); msgQ.Clear(); msg = null; flags.Clear();
 
@@ -239,144 +245,12 @@ namespace ShoryoumaTaxi
         float Rel(float yy) => (yy - y) * dir;
         static float R(float a, float b) => Random.Range(a, b);
 
-        // ============================================================
-        //  敵とお客さん
-        // ============================================================
-        string PickType(float f)
-        {
-            float wz = 5f, wh = f > 0.2f ? 2.2f : 1.2f, wt = f > 0.28f ? 0.7f : 0f;
-            float r = R(0, wz + wh + wt);
-            if (r < wz) return "zakuro";
-            if (r < wz + wh) return "hozuki";
-            return "tongue";
-        }
-
-        void MakeEnemies()
-        {
-            for (float h = 70; h < L - 50; h += R(14, 20))
-            {
-                int n = Random.value < 0.15f ? 2 : 1;
-                for (int i = 0; i < n; i++)
-                {
-                    string type = PickType(h / L);
-                    var e = new Enemy { type = type, y0 = h + i * 3 };
-                    e.y = e.yPrev = e.y0;
-                    float a = R(0, Mathf.PI * 2), r = Mathf.Sqrt(Random.value) * 0.85f;
-                    e.nx = Mathf.Cos(a) * r; e.nz = Mathf.Sin(a) * r;
-                    e.cd = R(0.4f, 2f); e.ph = R(0, 6);
-                    if (type == "zakuro") { e.go = ModelFactory.Zakuro(zakuroPrefab, out e.body, out e.arils); e.hp = 2; e.r = 1.0f; e.shooter = Random.value < 0.5f; }
-                    else if (type == "hozuki") { e.go = ModelFactory.Hozuki(hozukiPrefab); e.hp = 1; e.r = 0.9f; e.shooter = true; }
-                    else { e.go = ModelFactory.Tongue(tonguePrefab); e.hp = 5; e.r = 1.5f; e.shooter = true; }
-                    e.max = e.hp;
-                    e.go.SetActive(false);
-                    enemies.Add(e);
-                }
-            }
-        }
-
-        void Ripen(Enemy e)
-        {
-            e.ripe = true;
-            if (e.type == "zakuro" && e.body != null && zakuroPrefab == null) e.body.sharedMaterial = ModelFactory.ZakuroRipeMat;
-        }
-
-        void Revive(Enemy e)
-        {
-            e.alive = true; e.hp = e.max; e.ripe = e.emerged = e.bumped = false; e.y = e.yPrev = e.y0;
-            if (e.type == "zakuro" && zakuroPrefab == null) { e.body.sharedMaterial = ModelFactory.ZakuroMat; e.arils.SetActive(false); }
-        }
-
-        void Kill(Enemy e)
-        {
-            e.alive = false; e.go.SetActive(false); e.deadT = 0; kills++;
-            Burst(new Vector3(e.x, e.y, e.z), e.type == "hozuki" ? new Color(1f, 0.55f, 0.2f) : new Color(1f, 0.2f, 0.35f), 22, 4f);
-            Burst(new Vector3(e.x, e.y, e.z), Color.white, 10, 3f);
-            sfx.Play(sfx.pop);
-        }
-
-        void SpawnSoul(float yy)
-        {
-            float a = R(0, Mathf.PI * 2), r = Mathf.Sqrt(Random.value) * 0.8f;
-            var s = new Soul { go = ModelFactory.Soul(soulPrefab), y0 = yy, y = yy, yPrev = yy, nx = Mathf.Cos(a) * r, nz = Mathf.Sin(a) * r, ph = R(0, 6) };
-            s.go.SetActive(false);
-            souls.Add(s);
-        }
-
-        void LaunchFlying(Vector3 p, bool home)
-        {
-            var go = ModelFactory.Soul(soulPrefab);
-            float a = R(0, Mathf.PI * 2);
-            var f = new Flying { go = go, x = p.x, y = p.y, z = p.z, home = home };
-            if (home) { f.vx = 0; f.vy = 3; f.vz = 2.5f; f.life = f.max = 2.2f; }
-            else { f.vx = Mathf.Cos(a) * 9; f.vy = R(-2, 2); f.vz = Mathf.Abs(Mathf.Sin(a)) * 6 + 2; f.life = f.max = 1.4f; f.spin = 800; }
-            flying.Add(f);
-        }
-
-        /// <summary>魂に触れた：乗車。乗せていた客がいれば飛ばされる。向きはお客さんしだい。</summary>
-        void Board(Soul s)
-        {
-            s.gone = true;
-            Burst(new Vector3(s.x, s.y, s.z), new Color(0.62f, 0.9f, 1f), 20, 3.5f);
-            if (carrying)
-            {
-                LaunchFlying(new Vector3(px, y + 1, pz), false);
-                thrown++; sfx.Play(sfx.swap);
-                Say("「ひゃあっ！」乗っていたお客さんが飛ばされた！", 2.8f);
-            }
-            else sfx.Play(sfx.catchSilk);
-            carrying = true; steed.rider.SetActive(true);
-
-            float roomUp = L - 45 - y, roomDown = y - 45;
-            var can = new List<int>();
-            if (roomUp > 220) can.Add(1);
-            if (roomDown > 220) can.Add(-1);
-            int nd = can.Count == 2 ? (Random.value < 0.5f ? want : -want) : can.Count == 1 ? can[0] : -want;
-
-            float gy;
-            if (nd < 0) { float hi = y - 200; if (hi < 50) hi = y - 40; gy = R(Mathf.Max(45, y - 600), Mathf.Max(46, hi)); }
-            else { float lo = y + 200; if (lo > L - 50) lo = y + 40; gy = R(Mathf.Min(L - 46, lo), Mathf.Min(L - 45, y + 600)); }
-            var zone = STOPS[Mathf.Clamp(gy / L < 0.2f ? 0 : gy / L < 0.45f ? 1 : gy / L < 0.7f ? 2 : 3, 0, 3)];
-            goal = new Goal { y = gy, goalName = zone[Random.Range(0, zone.Length)] };
-            gateLabel.text = "行き先\n" + goal.goalName;
-
-            bool turned = nd != want;
-            want = nd;
-            Say($"「{goal.goalName}まで、お願いします」 {(turned ? "折り返して" : "このまま")}{(nd > 0 ? "上へ" : "下へ")}", 3.4f);
-            if (flags.Add("boardTip"))
-            {
-                Say("そのまま進むか、折り返すかは、お客さんしだい。", 3f);
-                Say("乗せている間は、ほかの魂に触れないように。", 3.6f);
-            }
-        }
-
-        /// <summary>行き先に着いた：運賃をもらって折り返す。</summary>
-        void Deliver()
-        {
-            delivered++; mon += fare;
-            water = Mathf.Min(100, water + 15);
-            LaunchFlying(new Vector3(px, y + 1, pz), true);
-            Burst(new Vector3(px, y, pz), new Color(1f, 0.82f, 0.48f), 36, 5f);
-            carrying = false; steed.rider.SetActive(false); goal = null;
-            want = -want;
-            sfx.Play(sfx.bell);
-            Say("「ありがとう。六文、置いていくよ」 水分 +15", 3f);
-            if (flags.Add("backTip")) Say("折り返して、来た道の魂を拾いに行こう。", 3.2f);
-            if (delivered >= goalCount) { clearT = 0.001f; Say("今夜の営業、おしまい。", 3f); }
-        }
-
-        void TurnAround(bool top)
-        {
-            want = -want;
-            if (top) { water = Mathf.Min(100, water + 20); Say("現世の井戸の口。お供えの水をもらって折り返す。 水分 +20", 3.2f); sfx.Play(sfx.bell); }
-            else Say("地獄の門だ。折り返す。", 2.6f);
-        }
-
         /// <summary>実際に進む向きが変わった瞬間。飛んでいる弾を片づけ、敵の状態を戻す。</summary>
         void Flip(int nd)
         {
             dir = nd;
-            foreach (var s in shots) Destroy(s.go); shots.Clear();
-            foreach (var s in salts) Destroy(s.go); salts.Clear();
+            projectileManager.ClearAll();
+
             air.Clear();
             foreach (var e in enemies) { e.bumped = false; e.emerged = false; }
             foreach (var s in souls) s.emerged = false;
