@@ -66,6 +66,17 @@ namespace ShoryoumaTaxi
 #endif
         }
 
+        /// <summary>v30：BGM の消音：M（押した瞬間だけ true）</summary>
+        public static bool MutePressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            var k = Keyboard.current;
+            return k != null && k.mKey.wasPressedThisFrame;
+#else
+            return Input.GetKeyDown(KeyCode.M);
+#endif
+        }
+
         /// <summary>マウス位置（スクリーン座標、左下原点）</summary>
         public static Vector2 MousePosition()
         {
