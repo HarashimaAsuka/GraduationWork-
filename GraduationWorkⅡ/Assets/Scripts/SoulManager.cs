@@ -27,7 +27,7 @@ namespace ShoryoumaTaxi
             void Board(Soul s)
             {
                 s.gone = true;
-                Burst(new Vector3(s.x, s.y, s.z), new Color(0.62f, 0.9f, 1f), 20, 3.5f);
+                effectManager.Burst(new Vector3(s.x, s.y, s.z), new Color(0.62f, 0.9f, 1f), 20, 3.5f);
                 if (carrying)
                 {
                     LaunchFlying(new Vector3(px, y + 1, pz), false);
@@ -65,7 +65,7 @@ namespace ShoryoumaTaxi
                 delivered++; mon += fare;
                 water = Mathf.Min(100, water + 15);
                 LaunchFlying(new Vector3(px, y + 1, pz), true);
-                Burst(new Vector3(px, y, pz), new Color(1f, 0.82f, 0.48f), 36, 5f);
+                effectManager.Burst(new Vector3(px, y, pz), new Color(1f, 0.82f, 0.48f), 36, 5f);
                 carrying = false; steed.rider.SetActive(false); goal = null;
                 want = -want;
                 sfx.Play(sfx.bell);

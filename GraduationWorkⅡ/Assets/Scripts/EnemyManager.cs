@@ -56,8 +56,8 @@ namespace ShoryoumaTaxi
             void Kill(Enemy e)
             {
                 e.alive = false; e.go.SetActive(false); e.deadT = 0; kills++;
-                Burst(new Vector3(e.x, e.y, e.z), e.type == "hozuki" ? new Color(1f, 0.55f, 0.2f) : new Color(1f, 0.2f, 0.35f), 22, 4f);
-                Burst(new Vector3(e.x, e.y, e.z), Color.white, 10, 3f);
+                effectManager.Burst(new Vector3(e.x, e.y, e.z), e.type == "hozuki" ? new Color(1f, 0.55f, 0.2f) : new Color(1f, 0.2f, 0.35f), 22, 4f);
+                effectManager.Burst(new Vector3(e.x, e.y, e.z), Color.white, 10, 3f);
                 sfx.Play(sfx.pop);
             }
     }    

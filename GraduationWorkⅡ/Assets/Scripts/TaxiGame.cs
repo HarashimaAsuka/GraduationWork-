@@ -79,6 +79,8 @@ namespace ShoryoumaTaxi
         GameObject gate; TextMesh gateLabel;
         GameObject web; MaterialPropertyBlock mpb;
         LineRenderer thread;
+        EffectManager effectManager;
+
         Mesh airMesh; Vector3[] airV; Color[] airC; readonly List<Vector4> air = new List<Vector4>(); // x,y,z,vy
         readonly List<Spark> sparks = new List<Spark>();
         readonly List<GameObject> warnRings = new List<GameObject>();
@@ -97,7 +99,6 @@ namespace ShoryoumaTaxi
             ModelFactory.Init();
             projectileManager = new ProjectileManager();
             mpb = new MaterialPropertyBlock();
-
             cam = Camera.main;
             if (cam == null) { var cg = new GameObject("Main Camera"); cg.tag = "MainCamera"; cam = cg.AddComponent<Camera>(); cg.AddComponent<AudioListener>(); }
             cam.clearFlags = CameraClearFlags.SolidColor;
@@ -147,6 +148,7 @@ namespace ShoryoumaTaxi
                 s.GetComponent<Renderer>().sharedMaterial = sparkMat; s.SetActive(false);
                 sparks.Add(new Spark { tr = s.transform, rd = s.GetComponent<Renderer>() });
             }
+            effectManager = new EffectManager(sparkMat);
 
             NewGame();
             FitField();
@@ -265,20 +267,8 @@ namespace ShoryoumaTaxi
         {
             if (inv > 0 || over) return;
             water -= amount; inv = 1.3f; hurtT = 0.35f; shake = 0.3f;
-            Burst(new Vector3(px, y, pz), new Color(0.42f, 0.77f, 0.91f), 14, 3f);
+            effectManager.Burst(new Vector3(px, y, pz), new Color(0.42f, 0.77f, 0.91f), 14, 3f);
             sfx.Play(sfx.hurt);
-        }
-
-        void Burst(Vector3 p, Color c, int n, float sp)
-        {
-            int made = 0;
-            foreach (var s in sparks)
-            {
-                if (made >= n) break;
-                if (s.life > 0) continue;
-                s.p = p; s.v = Random.onUnitSphere * R(0.4f, 1f) * sp; s.life = s.max = R(0.4f, 1f); s.c = c;
-                s.tr.gameObject.SetActive(true); made++;
-            }
         }
     }
 }

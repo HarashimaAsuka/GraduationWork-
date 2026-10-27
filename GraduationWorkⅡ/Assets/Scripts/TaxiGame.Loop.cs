@@ -118,7 +118,8 @@ namespace ShoryoumaTaxi
                     float a0 = (b.yp - e.y) * dir, a1 = (b.y - e.y) * dir;
                     if (a0 <= 0.6f && a1 >= -0.6f && Hyp(b.x - e.x, b.z - e.z) < e.r + 0.3f)
                     {
-                        b.dead = true; e.hp--; e.hit = 0.12f; Burst(new Vector3(b.x, e.y, b.z), Color.white, 4, 2); sfx.Play(sfx.hit, 0.6f);
+                        b.dead = true; e.hp--; e.hit = 0.12f;
+                        effectManager.Burst(new Vector3(b.x, e.y, b.z), Color.white, 4, 2); sfx.Play(sfx.hit, 0.6f);
                         if (e.type == "zakuro" && e.arils != null) e.arils.SetActive(true);
                         if (e.hp <= 0) Kill(e);
                     }
@@ -143,7 +144,7 @@ namespace ShoryoumaTaxi
                 if (guarding && dpS > -0.4f && d <= 1.5f && dist < WEB_R)
                 {
                     s.dead = true; caught++; water = Mathf.Min(100, water + 7); webGlow = 0.3f;
-                    Burst(new Vector3(s.x, s.y, s.z), new Color(0.42f, 0.77f, 0.91f), 8, 2.5f); sfx.Play(sfx.catchSilk);
+                    effectManager.Burst(new Vector3(s.x, s.y, s.z), new Color(0.42f, 0.77f, 0.91f), 8, 2.5f); sfx.Play(sfx.catchSilk);
                 }
                 else if (dpS > 0 && d <= 0 && dist < 0.6f) { s.dead = true; Hurt(s.onibi ? 8 : 7); }
                 else if (d < -4) s.dead = true;
@@ -196,7 +197,9 @@ namespace ShoryoumaTaxi
                 }
             }
 
-            if (water <= 0) { water = 0; over = true; Burst(new Vector3(px, y, pz), new Color(0.6f, 0.56f, 0.4f), 30, 3); }
+            if (water <= 0) { water = 0; over = true;
+                                effectManager.Burst(new Vector3(px, y, pz), new Color(0.6f, 0.56f, 0.4f), 30, 3);
+                            }
         }
 
         void Fire(Enemy e, float d, float V)
@@ -451,15 +454,7 @@ namespace ShoryoumaTaxi
             airMesh.bounds = new Bounds(new Vector3(0, y, 0), new Vector3(60, 200, 60));
 
             // 火花
-            foreach (var s in sparks)
-            {
-                if (s.life <= 0) continue;
-                s.life -= dt; s.p += s.v * dt; s.v *= Mathf.Pow(0.08f, dt);
-                if (s.life <= 0) { s.tr.gameObject.SetActive(false); continue; }
-                float a = s.life / s.max;
-                s.tr.position = s.p; s.tr.localScale = Vector3.one * 0.12f * a;
-                mpb.SetColor("_BaseColor", s.c); mpb.SetColor("_Color", s.c); s.rd.SetPropertyBlock(mpb);
-            }
+            effectManager.UpdateSparks(dt);
         }
 
         void Tint(GameObject g, Color c)
