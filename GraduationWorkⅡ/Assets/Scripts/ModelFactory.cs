@@ -9,7 +9,7 @@ namespace ShoryoumaTaxi
     /// 自作モデルに差し替えるときは TaxiGame のインスペクターにプレハブを入れる
     /// （向きは +Z が正面、+Y が上。大きさは2ユニット前後）。
     /// </summary>
-    public static class ModelFactory
+    public static partial class ModelFactory
     {
         // ---------- 共通部品 ----------
         static Material eyeWhite, eyeDark, stickMat;
@@ -52,7 +52,7 @@ namespace ShoryoumaTaxi
             GoldGlowMat = GlowMat(new Color(1f, 0.82f, 0.38f, 0.75f));
             AuraMat = GlowMat(new Color(1f, 0.23f, 0.16f, 0.75f));
             shadowMats.Clear();
-            foreach (var k in new[] { "zakuro", "hozuki", "tongue", "soul" })
+            foreach (var k in new[] { "zakuro", "hozuki", "tongue", "soul", "kasa", "chochin" })
                 shadowMats[k] = new[] { TexMat(Silhouette(k, true)), TexMat(Silhouette(k, false)) };
             SeedMat = Mats.Lit(new Color(1f, 0.18f, 0.33f), 0.85f, new Color(0.6f, 0f, 0.15f));
             SaltMat = Mats.Unlit(Color.white);
@@ -293,6 +293,7 @@ namespace ShoryoumaTaxi
                 }
                 return inside;
             }
+            if (InShapeExtra(type, x, y, out bool hx)) return hx;
             switch (type)
             {
                 case "zakuro":

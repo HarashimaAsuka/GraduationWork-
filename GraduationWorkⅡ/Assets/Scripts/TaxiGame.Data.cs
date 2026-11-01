@@ -83,6 +83,8 @@ namespace ShoryoumaTaxi
             new Luck { name = "凶",   w = 15, text = "敵が荒ぶる（ノルマボーナス +15文）", fierce = true, bonus = 15 },
         };
 
+        Luck luck = null;   // v19：おみくじはいったん外している（引かない）
+
         static Luck DrawOmikuji()
         {
             float sum = 0; foreach (var o in OMIKUJI) sum += o.w;
@@ -125,7 +127,10 @@ namespace ShoryoumaTaxi
 
         string CoName() => string.IsNullOrEmpty(coNameRaw) ? DEFAULT_NAME : coNameRaw;
         readonly System.Collections.Generic.Dictionary<string, int> lvCache = new System.Collections.Generic.Dictionary<string, int>();
-        int Lv(string id) => id == "charm" ? charms : (lvCache.TryGetValue(id, out var n) ? n : 0);
+        /// <summary>v19：売店・おみくじ・図鑑はいったん外している。SHOP_ON = true で品物の効き目が戻る。</summary>
+        const bool SHOP_ON = false;
+        int LvRaw(string id) => id == "charm" ? charms : (lvCache.TryGetValue(id, out var n) ? n : 0);
+        int Lv(string id) => SHOP_ON ? LvRaw(id) : 0;
         int BookCount(string id) => PlayerPrefs.GetInt(PP + "book." + id, 0);
         int BookSeen() { int n = 0; foreach (var g in GUESTS) if (BookCount(g.id) > 0) n++; return n; }
 

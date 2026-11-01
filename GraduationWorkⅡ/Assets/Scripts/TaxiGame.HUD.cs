@@ -1,7 +1,5 @@
-using System;
-using Unity.Burst.CompilerServices;
+using System.Collections.Generic;
 using UnityEngine;
-using static UnityEditor.Progress;
 
 namespace ShoryoumaTaxi
 {
@@ -24,6 +22,9 @@ namespace ShoryoumaTaxi
         int titleTab;                     // 0=あそびかた 1=設定
         string nameEdit = "";
         Vector2 shopScroll, bookScroll;
+        readonly List<Goal> hudRiders = new List<Goal>();
+        readonly List<Soul> hudSouls = new List<Soul>();
+        readonly List<Pickup> hudItems = new List<Pickup>();
 
         void InitStyles()
         {
@@ -35,7 +36,7 @@ namespace ShoryoumaTaxi
                 return st;
             }
             sBody = Make(18); sSmall = Make(14); sTiny = Make(12); sBig = Make(30, FontStyle.Bold);
-            sTitle = Make(72, FontStyle.Bold); sSign = Make(20, FontStyle.Bold, TextAnchor.MiddleCenter);
+            sTitle = Make(72, FontStyle.Bold); sSign = Make(18, FontStyle.Bold, TextAnchor.MiddleCenter);
             sMsg = Make(24, FontStyle.Normal, TextAnchor.MiddleCenter); sMsgDown = Make(16, FontStyle.Normal, TextAnchor.MiddleCenter);
             sCenter = Make(18, FontStyle.Normal, TextAnchor.MiddleCenter);
             sCall = Make(18, FontStyle.Bold, TextAnchor.MiddleCenter); sCall.wordWrap = false;
@@ -53,7 +54,7 @@ namespace ShoryoumaTaxi
             Fill(new Rect(r.x, r.y, w, r.height), c); Fill(new Rect(r.xMax - w, r.y, w, r.height), c);
         }
         static void Label(Rect r, string s, GUIStyle st, Color c) { var o = st.normal.textColor; st.normal.textColor = c; GUI.Label(r, s, st); st.normal.textColor = o; }
-        static string Hex(Color c) => ColorUtility.ToHtmlStringRGB(c);
+        static string HexS(Color c) => ColorUtility.ToHtmlStringRGB(c);
         bool Btn(Rect r, string s, bool enabled = true, bool small = false)
         {
             bool o = GUI.enabled; GUI.enabled = o && enabled;
@@ -72,9 +73,17 @@ namespace ShoryoumaTaxi
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(guiScale, guiScale, 1));
             float W = Screen.width / guiScale, H = 720f;
 
+            // 地獄の赤いふち（地獄の近く）と、親玉の攻撃の合図（ふちが赤く点滅）
+            if (mode == Mode.Play || mode == Mode.Pause)
+            {
+                bool bossWarn = false;
+                if (boss != null && !boss.dead) { bossWarn = boss.mode == "windup"; foreach (var h in boss.hands) if (h.mode == "aim" || h.mode == "aimS") bossWarn = true; }
+                float rim = Mathf.Max(Mathf.Clamp01(1 - Road.Zf(y) / 0.28f) * 0.45f, bossWarn ? 0.45f + 0.35f * Mathf.Sin(t * 18) : 0);
+                if (rim > 0.01f) Rim(W, H, new Color(0.88f, 0.12f, 0.1f, rim));
+            }
             // 被弾の赤・クリア時の暗転
             if (hurtT > 0) Fill(new Rect(0, 0, W, H), new Color(0.88f, 0.21f, 0.29f, hurtT / 0.35f * 0.35f));
-            if (clearT > 0) Fill(new Rect(0, 0, W, H), new Color(0, 0, 0, Mathf.Clamp01((clearT - 1) / 2) * 0.85f));
+            if (clearT > 0) Fill(new Rect(0, 0, W, H), new Color(0, 0, 0, Mathf.Clamp(Mathf.Clamp01((clearT - 1) / 2), 0, 0.85f)));
 
             if (mode == Mode.Play || mode == Mode.Pause) DrawHUD(W, H);
             switch (mode)
@@ -86,6 +95,24 @@ namespace ShoryoumaTaxi
                 case Mode.Book: DrawBook(W, H); break;
                 case Mode.Name: DrawName(W, H); break;
             }
+            // v30：BGM の切り替え（左下）
+            if (mode != Mode.Name)
+            {
+                var br = new Rect(16, H - 16 - 30, 170, 30);
+                if (GUI.Button(br, bgm.Muted ? "♪ BGM オフ（M）" : "♪ BGM オン（M）", sBtnSmall)) bgm.Toggle();
+            }
+        }
+
+        /// <summary>画面のふちを、内側へ向かって薄くなる色で塗る。</summary>
+        static void Rim(float W, float H, Color c)
+        {
+            const int N = 10; const float w = 9;
+            for (int i = 0; i < N; i++)
+            {
+                var k = new Color(c.r, c.g, c.b, c.a * (1 - i / (float)N) * 0.35f);
+                Fill(new Rect(i * w, 0, w, H), k); Fill(new Rect(W - (i + 1) * w, 0, w, H), k);
+                Fill(new Rect(0, i * w, W, w), k); Fill(new Rect(0, H - (i + 1) * w, W, w), k);
+            }
         }
 
         // ============================================================
@@ -93,125 +120,132 @@ namespace ShoryoumaTaxi
         // ============================================================
         void DrawHUD(float W, float H)
         {
-            // --- 左上：ゲージ ---
-            float x = 16, yy = 14, gw = 210;
+            // --- 左上：社名・ステージ・残り時間・水分・ノルマ・運賃・乗っているお客さん ---
+            float x = 16, yy = 12, gw = 230;
             var right = new GUIStyle(sBody) { alignment = TextAnchor.UpperRight };
-            float mw = MaxWater;
-            Label(new Rect(x, yy, gw, 24), "水分", sSmall, cDim);
-            Label(new Rect(x, yy - 2, gw, 26), $"<b>{Mathf.CeilToInt(Mathf.Max(0, water))}</b>", right, cPaper);
-            Fill(new Rect(x, yy + 24, gw, 9), new Color(1, 1, 1, 0.12f));
-            Fill(new Rect(x, yy + 24, gw * Mathf.Clamp01(water / mw), 9), water < 25 ? cHell : cWater);
-            Label(new Rect(x, yy + 38, gw, 22), "クモの糸", sSmall, cDim);
-            Fill(new Rect(x, yy + 60, gw, 4), new Color(1, 1, 1, 0.12f));
-            Fill(new Rect(x, yy + 60, gw * silk / 100f, 4), new Color(0.87f, 0.91f, 0.95f, silkLock ? 0.35f : 1f));
-            float row = yy + 70;
-            void Row(string k, string v, Color c) { Label(new Rect(x, row + 2, gw, 22), k, sSmall, cDim); Label(new Rect(x, row, gw, 24), $"<b>{v}</b>", right, c); row += 24; }
-            Row("送り届けた魂", $"{delivered} / {goalCount}", cPaper);
-            Row("運賃", $"{mon} 文", fineFlash > 0 ? cHell : cPaper);
-            Row("所持金", $"{purse} 文", cPaper);
-            if (charms > 0) Row("お守り", $"×{charms}", new Color(1f, 0.88f, 0.54f));
+            Label(new Rect(x, yy, gw, 24), $"<b>{CoName()}</b>タクシー", sBody, cLantern); yy += 26;
+            var chip = new Rect(x, yy, gw, 22); Fill(chip, new Color(cNight.r, cNight.g, cNight.b, 0.6f));
+            Label(new Rect(x + 8, yy + 2, gw - 16, 20), $"ステージ{st.no}　{st.name}", sSmall, cPaper); yy += 28;
+            int tl = Mathf.Max(0, Mathf.CeilToInt(timeLeft));
+            Label(new Rect(x, yy + 2, gw, 22), "残り時間", sSmall, cDim);
+            Label(new Rect(x, yy, gw, 24), $"<b>{tl / 60}:{tl % 60:00}</b>", right, tl <= 20 ? cHell : cPaper); yy += 26;
+            Label(new Rect(x, yy + 2, gw, 22), "水分", sSmall, cDim);
+            Label(new Rect(x, yy, gw, 24), $"<b>{Mathf.CeilToInt(Mathf.Max(0, water))}</b>", right, cPaper); yy += 24;
+            Fill(new Rect(x, yy, gw, 9), new Color(1, 1, 1, 0.12f));
+            Fill(new Rect(x, yy, gw * Mathf.Clamp01(water / 100f), 9), water < 25 ? cHell : cWater); yy += 16;
+            if (!st.boss) { Label(new Rect(x, yy + 2, gw, 22), "送り届けた魂", sSmall, cDim); Label(new Rect(x, yy, gw, 24), $"<b>{delivered} / {st.quota}</b>", right, cPaper); yy += 24; }
+            Label(new Rect(x, yy + 2, gw, 22), "今日の運賃", sSmall, cDim); Label(new Rect(x, yy, gw, 24), $"<b>{mon} 文</b>", right, fineFlash > 0 ? cHell : cPaper); yy += 24;
+            string eff = (wind > 0 ? $"追い風 {wind:0.0}秒　" : "") + (charmOn ? "お守り" : "");
+            if (eff.Length > 0) { Label(new Rect(x, yy, gw, 22), $"<b>{eff}</b>", sSmall, new Color(0.61f, 0.89f, 0.54f)); yy += 22; }
+            // 乗っているお客さん：近い行き先から順に
+            hudRiders.Clear(); hudRiders.AddRange(riders);
+            hudRiders.Sort((a, b) => Mathf.Abs(a.y - y).CompareTo(Mathf.Abs(b.y - y)));
+            foreach (var r in hudRiders)
+            {
+                var rr = new Rect(x, yy + 2, gw, 22);
+                Fill(rr, new Color(cNight.r, cNight.g, cNight.b, 0.62f));
+                Fill(new Rect(rr.x, rr.y, 3, rr.height), RARE_COL[r.guest.rare]);
+                Label(new Rect(rr.x + 8, rr.y + 2, gw - 100, 20), r.goalName, sSmall, cPaper);
+                Label(new Rect(rr.x, rr.y + 2, gw - 46, 20), $"<b>{(r.y > y ? "▲" : "▼")}{Mathf.CeilToInt(Mathf.Abs(r.y - y) / 10)}丈</b>", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight }, cPaper);
+                Label(new Rect(rr.x, rr.y + 2, gw - 6, 20), r.guest.tanuki ? "？？" : $"{r.fare}文", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight }, cLantern);
+                yy += 25;
+            }
 
-            // --- 上中央：行灯（空車／賃走）、残り時間、おみくじ ---
-            bool up = want > 0;
-            string sign = carrying && goal != null ? $"賃走　{goal.goalName}まで　{(up ? "▲上り" : "▼下り")}" : $"空車　お客さんを探す　{(up ? "▲上り" : "▼下り")}";
-            var sc = carrying ? cHire : cFree;
-            float sw = Mathf.Min(520, W - 2 * (gw + 40));
-            var sr = new Rect((W - sw) / 2, 12, sw, 40);
+            // --- 上中央：行灯（空車／乗車中）と、進む向き ---
+            bool up = (want > 0) != Road.Flip;
+            int n = riders.Count;
+            string sign = (st.boss ? "<b>親玉</b>　塩で祓う" : n > 0 ? $"<b>乗車 {n}/{MAX_RIDERS}</b>　遅さ −{Mathf.RoundToInt(n * SLOW_PER * 100)}%" : "<b>空車</b>　お客さんを探す")
+                + $"　　{(up ? "▲" : "▼")} {(want > 0 ? "前へ" : "後ろへ")}";
+            var sc = st.boss || n > 0 ? cHire : cFree;
+            float sw = Mathf.Min(460, W - 2 * (gw + 40));
+            var sr = new Rect((W - sw) / 2, 12, sw, 38);
             Fill(sr, new Color(cNight.r, cNight.g, cNight.b, 0.75f)); Frame(sr, sc);
             Label(sr, sign, sSign, sc);
-            int tl = Mathf.Max(0, Mathf.CeilToInt(timeLeft));
-            string luckText = luck != null ? $"　　おみくじ：{luck.name}　{luck.text}" : "";
-            Label(new Rect((W - sw) / 2, 56, sw, 24), $"残り時間 <b>{tl / 60}:{tl % 60:00}</b>{luckText}", new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter }, tl <= 30 ? cHell : cPaper);
 
-            // --- バックミラー（下り）：映像は左右反転して、本物のミラーと同じ向きにする ---
+            // --- 親玉の体力 ---
+            if (boss != null)
+            {
+                float bw = Mathf.Min(420, W * 0.56f);
+                var lr = new Rect((W - bw) / 2, 58, bw, 20);
+                string[] PH = { "", "一の段", "二の段（熟れ）", "三の段（割れ）" };
+                string lbl = $"鬼ザクロの親玉　{PH[Mathf.Clamp(boss.phase, 1, 3)]}{(boss.stun > 0 ? "　★弱点が出ている！" : boss.shield ? "　守りあり" : "")}";
+                Label(lr, $"<b>{lbl}</b>", new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter }, new Color(1f, 0.7f, 0.6f));
+                Fill(new Rect(lr.x, lr.yMax + 2, bw, 10), new Color(1, 1, 1, 0.12f));
+                Fill(new Rect(lr.x, lr.yMax + 2, bw * Mathf.Clamp01(Mathf.Max(0, boss.hp) / (float)boss.max), 10), cHell);
+            }
+
+            // --- バックミラー（後ろ向き）：映像は左右反転して、本物のミラーと同じ向きにする ---
             if (mirrorCam.enabled && mirrorRT != null)
             {
                 float mwid = Mathf.Min(380, W * 0.52f), mh = mwid / 2.4f;
-                var mr = new Rect((W - mwid) / 2, 88, mwid, mh);
+                var mr = new Rect((W - mwid) / 2, boss != null ? 100 : 88, mwid, mh);
                 Fill(new Rect(mr.x - 7, mr.y - 7, mr.width + 14, mr.height + 14), new Color(0.17f, 0.11f, 0.09f));
                 GUI.DrawTextureWithTexCoords(mr, mirrorRT, new Rect(1, 0, -1, 1));
                 Label(new Rect(mr.x, mr.yMax + 8, mr.width, 18), "バックミラー（手前から来るもの）", new GUIStyle(sTiny) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold }, cDim);
             }
 
-            // --- 右：高度メーター ---
+            // --- 右：高度メーター（上が現世、下が地獄） ---
             float mx = W - 30, top = 70, bot = H - 40, mH = bot - top;
             for (int i = 0; i < 60; i++)
             {
                 float f0 = 1 - i / 60f;
-                Fill(new Rect(mx, top + mH * i / 60f, 16, mH / 60f + 1), World.ZoneColor(f0, z => z.bg) * 1.8f + new Color(0.05f, 0.05f, 0.05f));
+                Fill(new Rect(mx, top + mH * i / 60f, 16, mH / 60f + 1), ZoneLook(f0, z => z.bg) * 1.8f + new Color(0.05f, 0.05f, 0.05f));
             }
             Frame(new Rect(mx, top, 16, mH), new Color(1, 1, 1, 0.25f), 1);
             void Zone(float f, string name, Color c) => Label(new Rect(mx - 96, top + mH * (1 - f) - 10, 88, 20), name, new GUIStyle(sSmall) { alignment = TextAnchor.MiddleRight }, c);
             Zone(1f, "現世", cLantern); Zone(0.83f, "夜空", cDim); Zone(0.58f, "雲海", cDim); Zone(0.33f, "三途の霧", cDim); Zone(0f, "地獄", cHell);
+            float MY(float yy2) => top + mH * (1 - Road.Zf(yy2));
             // 流れる縞：進む向きへ流れる
             float flow = Mathf.Repeat(t * (up ? 30f : -15f), 16f);
             for (float s = -flow; s < mH; s += 16) if (s >= 0) Fill(new Rect(mx + 2, top + s, 12, 2), new Color(1, 1, 1, 0.35f));
-            // 空車のとき、前方の近い魂を水色の点で出す
-            if (!carrying)
+            // 待っている魂（近い4人）
+            if (n < MAX_RIDERS)
             {
-                int shown = 0; float lastD = 0;
-                for (int n = 0; n < 3; n++)
+                hudSouls.Clear(); foreach (var s in souls) if (!s.gone) hudSouls.Add(s);
+                hudSouls.Sort((a, b) => Mathf.Abs(a.y - y).CompareTo(Mathf.Abs(b.y - y)));
+                for (int i = 0; i < hudSouls.Count && i < 4; i++)
                 {
-                    Soul nearest = null; float nd = float.MaxValue;
-                    foreach (var s in souls) { float d = Rel(s.y); if (d > lastD + 0.001f && d < nd) { nd = d; nearest = s; } }
-                    if (nearest == null) break;
-                    lastD = nd; shown++;
-                    float sy = top + mH * (1 - Mathf.Clamp01(nearest.y / L));
-                    var dc = RARE_COL[nearest.guest != null ? nearest.guest.rare : 0];
+                    float sy = MY(hudSouls[i].y); var dc = RARE_COL[hudSouls[i].guest.rare];
                     Fill(new Rect(mx + 1, sy - 7, 14, 14), new Color(dc.r, dc.g, dc.b, 0.35f));
                     Fill(new Rect(mx + 3, sy - 5, 10, 10), dc);
                 }
             }
-            if (goal != null)
+            // アイテム（近い4つ。ひし形の代わりに小さな四角）
+            hudItems.Clear(); foreach (var it in items) if (!it.taken) hudItems.Add(it);
+            hudItems.Sort((a, b) => Mathf.Abs(a.y - y).CompareTo(Mathf.Abs(b.y - y)));
+            for (int i = 0; i < hudItems.Count && i < 4; i++)
             {
-                float gy = top + mH * (1 - goal.y / L);
-                Fill(new Rect(mx - 6, gy - 3, 28, 6), new Color(1f, 0.42f, 0.29f));
-                Label(new Rect(mx - 70, gy - 10, 60, 20), "行き先", new GUIStyle(sSmall) { alignment = TextAnchor.MiddleRight, fontStyle = FontStyle.Bold }, new Color(1f, 0.7f, 0.6f));
+                float iy = MY(hudItems[i].y); var ic = Hex(ItemHex(hudItems[i].kind));
+                Fill(new Rect(mx + 14, iy - 6, 12, 12), cNight); Fill(new Rect(mx + 16, iy - 4, 8, 8), ic);
             }
-            float my = top + mH * (1 - Mathf.Clamp01(y / L));
-            var dotC = up ? cCuc : cNasu;
+            // 行き先（乗っているお客さん全員）
+            foreach (var r in riders)
+            {
+                float gy = MY(r.y);
+                Fill(new Rect(mx - 6, gy - 3, 28, 6), new Color(1f, 0.42f, 0.29f));
+            }
+            float my = MY(y);
+            var dotC = want > 0 ? cCuc : cNasu;
             Fill(new Rect(mx - 6, my - 14, 28, 28), dotC);
             Label(new Rect(mx - 6, my - 14, 28, 28), up ? "▲" : "▼", sCenter, cNight);
-            string tag = goal != null ? $"行き先まで {Mathf.CeilToInt(Mathf.Abs(goal.y - y) / 10)}丈" : World.ZoneName(y / L);
-            var tr = new Rect(mx - 168, my - 13, 156, 26);
+            var nearest = hudRiders.Count > 0 ? hudRiders[0] : null;
+            string tag = nearest != null ? $"{nearest.goalName}まで {Mathf.CeilToInt(Mathf.Abs(nearest.y - y) / 10)}丈"
+                : st.boss ? (want > 0 ? $"現世の出口まで {Mathf.Max(0, Mathf.CeilToInt((L - 30 - y) / 10))}丈" : $"地獄の底まで {Mathf.Max(0, Mathf.CeilToInt((y - 30) / 10))}丈")
+                : World.ZoneName(Road.Zf(y));
+            var tr = new Rect(mx - 196, my - 13, 184, 26);
             Fill(tr, new Color(cNight.r, cNight.g, cNight.b, 0.85f));
-            Label(tr, tag, sCenter, cPaper);
+            Label(tr, tag, new GUIStyle(sCenter) { fontSize = 15 }, cPaper);
 
             bool down = dir < 0;
-
-            // --- 声の知らせ：上りは馬の上に吹き出し、下りは画面の下にまとめる（前を隠さない） ---
-            if (mode == Mode.Play && call != null && t - call.t0 < 1.6f)
-            {
-                float age = t - call.t0, a = age > 1.3f ? (1.6f - age) / 0.3f : 1f;
-                var edge = call.danger ? new Color(1f, 0.48f, 0.35f) : new Color(0.56f, 0.86f, 1f);
-                string text = $"<size={(down ? 13 : 15)}><color=#{Hex(edge)}>{call.who}</color></size>  <color=#FFD27A>{call.arrow}</color>  {call.text}";
-                var st = new GUIStyle(sCall) { fontSize = down ? 15 : 18 };
-                var size = st.CalcSize(new GUIContent(text));
-                float bw = size.x + 26, bh = size.y + 10, cx, by;
-                if (down) { cx = W / 2; by = H - 58 - bh; }
-                else
-                {
-                    var p = cam.WorldToScreenPoint(steed.root.transform.position);
-                    cx = p.z > 0 ? p.x / guiScale : W / 2;
-                    float gyy = p.z > 0 ? (Screen.height - p.y) / guiScale : H / 2;
-                    by = Mathf.Max(60, gyy - 54) - bh;
-                }
-                var br = new Rect(cx - bw / 2, by, bw, bh);
-                Fill(br, new Color(cNight.r, cNight.g, cNight.b, (down ? 0.62f : 0.9f) * a));
-                Frame(br, new Color(edge.r, edge.g, edge.b, a));
-                if (!down) Fill(new Rect(cx - 6, br.yMax, 12, 8), new Color(edge.r, edge.g, edge.b, a));
-                Label(br, text, st, new Color(cPaper.r, cPaper.g, cPaper.b, a));
-            }
-
-            // --- メッセージ：下りは画面のいちばん下に小さく（手前から来るものを隠さない） ---
+            // --- メッセージ：後ろ向きのときは画面のいちばん下に小さく（手前から来るものを隠さない） ---
             if (msg != null)
             {
                 var m = msg.Value; float age = t - m.t0;
-                float a = Mathf.Clamp01(Mathf.Min(age / 0.35f, (m.dur - age) / 0.4f));
+                float a = Mathf.Clamp01(Mathf.Min(age / 0.12f, (m.dur - age) / 0.4f));
                 if (a > 0)
                 {
-                    Rect r = down ? new Rect((W - Mathf.Min(560, W - 32)) / 2, H - 12 - 34, Mathf.Min(560, W - 32), 34)
-                                  : new Rect(W * 0.12f, H * 0.74f, W * 0.76f, 52);
+                    Rect r = down ? new Rect((W - Mathf.Min(620, W - 32)) / 2, H - 12 - 34, Mathf.Min(620, W - 32), 34)
+                                  : new Rect(W * 0.12f, H * 0.8f, W * 0.76f, 48);
                     Fill(r, new Color(cNight.r, cNight.g, cNight.b, (down ? 0.5f : 0.6f) * a));
                     Label(r, m.text, down ? sMsgDown : sMsg, new Color(cPaper.r, cPaper.g, cPaper.b, a));
                 }
@@ -225,7 +259,7 @@ namespace ShoryoumaTaxi
         }
 
         // ============================================================
-        //  タイトル（左：社名とボタン　右：あそびかた／設定）
+        //  タイトル（左：社名とボタン・ステージを選ぶ　右：あそびかた／設定）
         // ============================================================
         void DrawTitle(float W, float H)
         {
@@ -233,37 +267,35 @@ namespace ShoryoumaTaxi
             bool twoCol = tw >= 900;
             Panel(W, H, tw, 620, out var r);
             float lw = twoCol ? tw * 0.5f : tw, yy = r.y;
-            Label(new Rect(r.x, yy, lw, 22), "3D 縦穴タクシー ／ 約5分", sSmall, cDim); yy += 28;
+            Label(new Rect(r.x, yy, lw, 22), "3D 縦穴シューティング ／ 3ステージ", sSmall, cDim); yy += 28;
             string n = CoName();
             var ts = new GUIStyle(sTitle) { fontSize = n.Length <= 4 ? 72 : n.Length <= 6 ? 58 : 46, wordWrap = false };
             Label(new Rect(r.x, yy, lw, 84), n, ts, cPaper); yy += 84;
             Label(new Rect(r.x, yy, lw, 40), "タクシー地獄営業所", sBig, cLantern); yy += 52;
-            Label(new Rect(r.x, yy, lw - 16, 120),
-                "お盆の夜、地獄と現世をつなぐ縦の道で、魂のお客さんを送り届ける。上りはきゅうりの馬、下りはナスの牛。遠くまで運ぶほど運賃が上がる。稼いだお金は売店で使える。",
-                sBody, cPaper); yy += 118;
-            Label(new Rect(r.x, yy, lw, 24), $"所持金 <b>{purse} 文</b>　　お守り {charms}　　図鑑 {BookSeen()} / {GUESTS.Length}", sBody, cPaper); yy += 40;
-            if (Btn(new Rect(r.x, yy, 240, 52), "営業を始める")) Begin();
-            if (Btn(new Rect(r.x + 252, yy, 150, 52), "売店")) OpenShop(Mode.Title);
-            yy += 62;
-            if (Btn(new Rect(r.x, yy, 240, 44), "お客さん図鑑", true, true)) OpenBook(Mode.Title);
-            if (Btn(new Rect(r.x + 252, yy, 150, 44), "社名を変える", true, true)) OpenName(Mode.Title);
-            yy += 54;
+            Label(new Rect(r.x, yy, lw - 16, 130),
+                "お盆の夜、地獄と現世をつなぐ縦の道で、魂のお客さんを送り届ける。魂の上の札で行き先を見て、誰を乗せるか選ぶ。5人まで乗れるが、乗せるほど遅くなる。敵にぶつかると向きが反転して、後ろへ進んでしまう。",
+                sBody, cPaper); yy += 132;
+            if (Btn(new Rect(r.x, yy, 240, 52), "営業を始める")) Begin(1);
+            if (Btn(new Rect(r.x + 252, yy, 170, 52), "社名を変える", true, true)) OpenName(Mode.Title);
+            yy += 64;
+            Label(new Rect(r.x, yy + 10, 110, 22), "ステージを選ぶ", sSmall, cDim);
+            if (Btn(new Rect(r.x + 112, yy, 96, 40), "1 送り", true, true)) Begin(1);
+            if (Btn(new Rect(r.x + 214, yy, 96, 40), "2 帰り", true, true)) Begin(2);
+            if (Btn(new Rect(r.x + 316, yy, 140, 40), "3 幻の三日目", true, true)) Begin(3);
 
-            Rect pr = twoCol ? new Rect(r.x + lw + 16, r.y + 28, tw - lw - 16, 560) : new Rect(r.x, yy, tw, r.yMax - yy);
+            Rect pr = twoCol ? new Rect(r.x + lw + 16, r.y + 28, tw - lw - 16, 560) : new Rect(r.x, yy + 54, tw, r.yMax - yy - 54);
             titleTab = GUI.Toolbar(new Rect(pr.x, pr.y, 260, 34), titleTab, new[] { "あそびかた", "設定" }, sBtnSmall);
             var box = new Rect(pr.x, pr.y + 42, pr.width, pr.height - 42);
             Fill(box, cCard);
             var inner = new Rect(box.x + 16, box.y + 14, box.width - 32, box.height - 28);
             if (titleTab == 0)
                 Label(inner,
-                    "・青く光る魂がお客さん。触れると乗車。紫・金に光る魂は珍しいお客さん。\n" +
-                    "・行き先の高さを通り過ぎると到着。乗車距離が長いほど運賃が上がる。\n" +
-                    "・乗せている間にほかの魂に触れると、乗っていたお客さんが飛ばされて、お詫び料を払う。\n" +
-                    "・乗車中に一度も当たらなければ、心づけがもらえる。\n" +
-                    "・上りは塩で鬼ザクロを祓える。撃つほど馬は干からびる。下りは避けて進む（設定で「追われる」にもできる）。\n" +
-                    $"・{goalCount} 人送り届ければノルマ達成。残り時間が多いほどボーナスが増える。\n" +
-                    "・道のいちばん下（地獄営業所）に戻ると、売店に寄れる。\n\n" +
-                    "<color=#A69EB5>左クリック：塩　右クリック：クモの糸　WASD：移動　P / Esc：一時停止</color>",
+                    "・魂の上の札に、行き先・距離・運賃が出る。触れると乗車（5人まで。1人ごとに10%遅くなる）。満席で触れると、いちばん前のお客さんが押し出される。\n" +
+                    "・行き先の門をくぐると降りて運賃。\n" +
+                    "・敵にぶつかると向きが反転し、お客さんを1人落とす。もう一度ぶつかると元に戻る。後ろ向きのときは、弾に当たっても前に戻る。道の端でも折り返す。\n" +
+                    "・道中のアイテム：水（水分）・風車（ぐんと加速）・線香（時間）・お守り（1回守る）・ナス（向きが反転）\n" +
+                    "・ステージ1「送り」・2「帰り」はノルマの人数を送り届けるとクリア。3「幻の三日目」は親玉を祓う。道の終わりに着くと負け。\n\n" +
+                    "<color=#A69EB5>左クリック / Z / Space：塩（撃つほど干からびる）　WASD・矢印：移動　P / Esc：一時停止　M：BGM</color>",
                     sSmall, cPaper);
             else DrawSettings(inner);
         }
@@ -273,26 +305,21 @@ namespace ShoryoumaTaxi
         {
             float yy = r.y;
             bool mf = GUI.Toggle(new Rect(r.x, yy, r.width, 28), mouseFollow, " マウスの位置に馬がついていく", sToggle); yy += 40;
-            Label(new Rect(r.x, yy, r.width, 22), "下りで、手前から来るものの知らせ方", sSmall, cDim); yy += 24;
+            Label(new Rect(r.x, yy, r.width, 22), "後ろ向きのとき、手前から来るものの知らせ方", sSmall, cDim); yy += 24;
             var h = (Hint)GUI.Toolbar(new Rect(r.x, yy, Mathf.Min(r.width, 440), 32), (int)hint, HINT_LABEL, sBtnSmall); yy += 44;
-            bool co = GUI.Toggle(new Rect(r.x, yy, r.width, 28), callout, " 声で知らせる（お客さん・クモが方向を叫ぶ）", sToggle); yy += 40;
-            Label(new Rect(r.x, yy, r.width, 22), "下りの遊び方", sSmall, cDim); yy += 24;
-            bool ch = GUI.Toolbar(new Rect(r.x, yy, Mathf.Min(r.width, 300), 32), chaseMode ? 1 : 0, new[] { "よける", "追われる" }, sBtnSmall) == 1; yy += 40;
-            Label(new Rect(r.x, yy, r.width, 60), ch ? "下りは、後ろ（奥）から敵が迫ってくる。左クリックで後ろへ塩を撒ける。" : "下りは塩が撒けない。置いてある敵を避けて進む。", sTiny, cDim);
-            if (mf != mouseFollow || h != hint || co != callout || ch != chaseMode)
+            if (mf != mouseFollow || h != hint)
             {
-                if (ch != chaseMode && dir < 0) ClearChasers();   // 下りの最中に切り替えたら、追っ手を片づける
-                mouseFollow = mf; hint = h; callout = co; chaseMode = ch;
+                mouseFollow = mf; hint = h;
                 SaveSettings();
             }
         }
 
         void DrawPause(float W, float H)
         {
-            Panel(W, H, Mathf.Min(560, W - 32), 470, out var r);
+            Panel(W, H, Mathf.Min(560, W - 32), 400, out var r);
             Label(new Rect(r.x, r.y, r.width, 40), "一時停止", sBig, cPaper);
-            DrawSettings(new Rect(r.x, r.y + 54, r.width, 300));
-            float by = r.y + 400;
+            DrawSettings(new Rect(r.x, r.y + 54, r.width, 200));
+            float by = r.y + 330;
             if (Btn(new Rect(r.x, by, 170, 48), "続ける")) Resume();
             if (Btn(new Rect(r.x + 182, by, 170, 48), "社名を変える", true, true)) OpenName(Mode.Pause);
             if (Btn(new Rect(r.x + 364, by, 170, 48), "タイトルへ")) ToTitle();
@@ -300,10 +327,10 @@ namespace ShoryoumaTaxi
 
         void DrawResult(float W, float H)
         {
-            Panel(W, H, Mathf.Min(620, W - 32), 500, out var r);
+            Panel(W, H, Mathf.Min(640, W - 32), 470, out var r);
             Label(new Rect(r.x, r.y, r.width, 24), resultTitle, sSmall, cDim);
             Label(new Rect(r.x, r.y + 30, r.width, 120), resultText, new GUIStyle(sBig) { fontSize = 24 }, cPaper);
-            string[] k = { "送り届けた魂", "運賃", "飛ばしてしまったお客さん", "祓った敵" };
+            string[] k = { "送り届けた魂", "運賃", "落としたお客さん", "祓った敵" };
             string[] v = { $"{delivered} 人", $"{mon} 文", $"{thrown} 人", $"{kills}" };
             for (int i = 0; i < 4; i++)
             {
@@ -312,13 +339,12 @@ namespace ShoryoumaTaxi
                 Label(new Rect(cell.x + 12, cell.y + 6, cell.width, 20), k[i], sSmall, cDim);
                 Label(new Rect(cell.x + 12, cell.y + 26, cell.width, 36), $"<b>{v[i]}</b>", sBig, cPaper);
             }
-            Label(new Rect(r.x, r.y + 320, r.width, 26), (bonus > 0 ? $"ボーナス +{bonus} 文　" : "") + $"所持金 {purse} 文", sBody, cLantern);
-            float by = r.y + 366;
-            if (Btn(new Rect(r.x, by, 300, 50), "もう一度、営業する")) Begin();
-            if (Btn(new Rect(r.x + 312, by, 140, 50), "売店")) OpenShop(Mode.Result);
-            by += 60;
-            if (Btn(new Rect(r.x, by, 300, 44), "お客さん図鑑", true, true)) OpenBook(Mode.Result);
-            if (Btn(new Rect(r.x + 312, by, 140, 44), "タイトルへ", true, true)) ToTitle();
+            float by = r.y + 330;
+            float bx = r.x;
+            if (resultNext) { if (Btn(new Rect(bx, by, 220, 50), "次のステージへ")) Begin(Mathf.Min(3, stage + 1)); bx += 232; }
+            if (Btn(new Rect(bx, by, 240, 50), resultClear ? "もう一度、このステージ" : "もう一度挑戦する", true, true)) Begin(stage);
+            bx += 252;
+            if (Btn(new Rect(bx, by, 140, 50), "タイトルへ", true, true)) ToTitle();
         }
 
         // ============================================================
@@ -351,7 +377,7 @@ namespace ShoryoumaTaxi
                 var it = ITEMS[i];
                 var c = new Rect((i % cols) * (cw + gap), (i / cols) * (ch + gap), cw, ch);
                 Fill(c, cCard);
-                int n = Lv(it.id); bool maxed = n >= it.max; int price = maxed ? 0 : it.price[n];
+                int n = LvRaw(it.id); bool maxed = n >= it.max; int price = maxed ? 0 : it.price[n];
                 Label(new Rect(c.x + 12, c.y + 8, cw - 24, 24), $"<b>{it.name}</b>", sBody, cPaper);
                 Label(new Rect(c.x + 12, c.y + 10, cw - 24, 20), it.kind, new GUIStyle(sTiny) { alignment = TextAnchor.UpperRight }, cLantern);
                 Label(new Rect(c.x + 12, c.y + 36, cw - 24, 64), it.desc, sTiny, cDim);
@@ -366,7 +392,7 @@ namespace ShoryoumaTaxi
 
         void Buy(ItemDef it)
         {
-            int n = Lv(it.id);
+            int n = LvRaw(it.id);
             if (n >= it.max || purse < it.price[n]) return;
             purse -= it.price[n];
             SetLv(it.id, n + 1);   // お守りは所持数、ほかは段階が上がる（中で保存する）
@@ -425,7 +451,7 @@ namespace ShoryoumaTaxi
                 coNameRaw = n.Length > 0 ? n : DEFAULT_NAME;
                 SaveProfile(); ApplyName();
             }
-            if (nameNext == Mode.Play) { if (ok) StartGame(); else mode = Mode.Title; }
+            if (nameNext == Mode.Play) { if (ok) StartStage(nameStage); else mode = Mode.Title; }
             else mode = nameNext;
         }
 
@@ -440,7 +466,7 @@ namespace ShoryoumaTaxi
             nameEdit = GUI.TextField(new Rect(r.x, r.y + 76, r.width, 52), nameEdit ?? "", 8, sField);
             if (GUI.GetNameOfFocusedControl() != "coName") GUI.FocusControl("coName");
             string pv = string.IsNullOrEmpty((nameEdit ?? "").Trim()) ? DEFAULT_NAME : nameEdit.Trim();
-            Label(new Rect(r.x, r.y + 140, r.width, 40), $"<b>{pv}</b><color=#{Hex(cLantern)}>タクシー地獄営業所</color>", new GUIStyle(sBig) { fontSize = 26 }, cPaper);
+            Label(new Rect(r.x, r.y + 140, r.width, 40), $"<b>{pv}</b><color=#{HexS(cLantern)}>タクシー地獄営業所</color>", new GUIStyle(sBig) { fontSize = 26 }, cPaper);
             Label(new Rect(r.x, r.y + 186, r.width, 22), "8文字まで。あとからタイトル・一時停止でいつでも変えられる。", sTiny, cDim);
             if (Btn(new Rect(r.x, r.y + 240, 200, 50), "決める")) CloseName(true);
             if (Btn(new Rect(r.x + 212, r.y + 240, 220, 50), nameNext == Mode.Pause ? "一時停止に戻る" : "戻る", true, true)) CloseName(false);
