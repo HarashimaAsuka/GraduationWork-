@@ -430,7 +430,7 @@ namespace ShoryoumaTaxi
                 Label(new Rect(c.x + 14, c.y + 10, cw - 28, 20), STARS[g.rare], new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight }, rc);
                 string body = cnt > 0
                     ? $"「{g.hello}」\n運賃 ×{g.mul}{(g.tanuki ? "（木の葉か、3倍か）" : "")}{(g.fill ? "・水分が満タンに" : "")}\n送り届けた回数 {cnt}"
-                    : "まだ乗せたことがない。" + (g.rare == 2 ? "金色に光る魂らしい。" : g.rare == 1 ? "紫に光る魂らしい。" : "");
+                                        : "まだ乗せたことがない。" + (g.rare == 2 ? "紫に光る魂らしい。" : g.rare == 1 ? "黄色に光る魂らしい。" : "");
                 Label(new Rect(c.x + 14, c.y + 38, cw - 28, ch - 44), body, sTiny, cnt > 0 ? cPaper : cDim);
             }
             GUI.EndScrollView();

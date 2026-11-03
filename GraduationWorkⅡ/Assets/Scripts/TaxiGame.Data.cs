@@ -57,7 +57,7 @@ namespace ShoryoumaTaxi
             new GuestDef { id = "tono",    name = "お殿様",           rare = 2, w = 1,    mul = 3.0f, hello = "余を運ぶ栄誉を与えよう",       thanks = "大儀であった。褒美をとらす！" },
         };
 
-        static readonly Color[] RARE_COL = { new Color(0.62f, 0.91f, 1f), new Color(0.82f, 0.66f, 1f), new Color(1f, 0.82f, 0.38f) };
+        static readonly Color[] RARE_COL = { new Color(0.62f, 0.91f, 1f), new Color(1f, 0.82f, 0.38f), new Color(0.82f, 0.66f, 1f) };
 
         GuestDef PickGuest()
         {
