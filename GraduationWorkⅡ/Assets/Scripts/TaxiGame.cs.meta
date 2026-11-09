@@ -1,2 +1,18 @@
 fileFormatVersion: 2
 guid: b3611c9cf2af0f249ac3562385865365
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - cucumberPrefab: {instanceID: 0}
+  - nasuPrefab: {instanceID: 0}
+  - zakuroPrefab: {instanceID: 0}
+  - hozukiPrefab: {instanceID: 0}
+  - tonguePrefab: {instanceID: 0}
+  - soulPrefab: {instanceID: 0}
+  - conductorPrefab: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

@@ -58,7 +58,7 @@ namespace ShoryoumaTaxi
         }
     }
 
-    public static class MeshKit
+    public static partial class MeshKit
     {
         /// <summary>
         /// 回転体（ろくろ）メッシュ。profile は (半径, 高さ) の列。
