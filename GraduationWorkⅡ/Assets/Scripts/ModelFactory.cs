@@ -44,12 +44,12 @@ namespace ShoryoumaTaxi
             SoulMat = Mats.Lit(new Color(0.9f, 0.96f, 1f), 0.6f, new Color(0.35f, 0.75f, 1f));
             SoulMats = new[] {
                 SoulMat,
-                Mats.Lit(new Color(0.95f, 0.89f, 1f), 0.6f, new Color(0.62f, 0.44f, 1f)),
                 Mats.Lit(new Color(1f, 0.95f, 0.75f), 0.6f, new Color(1f, 0.72f, 0.13f)),
+                Mats.Lit(new Color(0.95f, 0.89f, 1f), 0.6f, new Color(0.62f, 0.44f, 1f)),
             };
             GlowTex = RadialTex(64);
             SoulHaloMat = GlowMat(new Color(0.56f, 0.86f, 1f, 0.6f));
-            GoldGlowMat = GlowMat(new Color(1f, 0.82f, 0.38f, 0.75f));
+            GoldGlowMat = GlowMat(new Color(0.82f, 0.66f, 1f, 0.75f));   // とても珍しい魂の後ろの光（紫）
             AuraMat = GlowMat(new Color(1f, 0.23f, 0.16f, 0.75f));
             shadowMats.Clear();
             foreach (var k in new[] { "zakuro", "hozuki", "tongue", "soul", "kasa", "chochin" })
@@ -175,6 +175,16 @@ namespace ShoryoumaTaxi
         /// <summary>魂。rare で体の色が変わり、2（とても珍しい）は金色に光る。</summary>
         public static GameObject Soul(GameObject prefab, int rare = 0)
         {
+            // v33：班で作った魂のモデル（色違い）が入っていれば、それを使う
+            if (SoulModelFor(rare) != null)
+            {
+                var r = new GameObject("魂");
+                AddSoulModel(r.transform, rare);
+                Prim(PrimitiveType.Quad, r.transform, new Vector3(0, 0, -0.3f), Vector3.one * 3.4f, SoulHaloMat).name = "halo";
+                var gl = Prim(PrimitiveType.Quad, r.transform, new Vector3(0, 0, -0.35f), Vector3.one * 5f, GoldGlowMat);
+                gl.name = "gold"; gl.SetActive(rare == 2);
+                return r;
+            }
             var g = Root("魂", prefab);
             if (prefab != null) return g;
             var t = g.transform;
@@ -195,12 +205,63 @@ namespace ShoryoumaTaxi
         /// <summary>作った魂の色を変える（背中に乗せるお客さんの切り替え用）。</summary>
         public static void SetSoulRare(GameObject g, int rare)
         {
+            // v33：班のモデルなら、色違いのモデルに入れ替える
+            var model = g.transform.Find("model");
+            if (model != null && SoulModelFor(rare) != null)
+            {
+                model.name = "model (old)"; model.gameObject.SetActive(false); Object.Destroy(model.gameObject);
+                AddSoulModel(g.transform, rare);
+            }
             var body = g.transform.Find("body");
             if (body != null) body.GetComponent<Renderer>().sharedMaterial = SoulMats[Mathf.Clamp(rare, 0, 2)];
             var gold = g.transform.Find("gold");
             if (gold != null) gold.gameObject.SetActive(rare == 2);
         }
+        // ---------- v33：班で作った魂のモデル ----------
+        /// <summary>魂のモデル（FBX）。0=白（ふつう） 1=紫（珍しい） 2=黄（とても珍しい）。TaxiGame のインスペクターから入る。
+        /// 空の色は白のモデルを使い、ぜんぶ空なら仮のモデルになる。向きは +Z が正面、原点は体の中心。</summary>
+        public static GameObject[] SoulModels = new GameObject[3];
+        public static float SoulModelScale = 1.15f;
+        static readonly Dictionary<Material, Material> glowMats = new Dictionary<Material, Material>();
 
+        static GameObject SoulModelFor(int rare)
+        {
+            if (SoulModels == null || SoulModels.Length == 0) return null;
+            int i = Mathf.Clamp(rare, 0, SoulModels.Length - 1);
+            if (SoulModels[i] != null) return SoulModels[i];
+            foreach (var m in SoulModels) if (m != null) return m;
+            return null;
+        }
+
+        static void AddSoulModel(Transform root, int rare)
+        {
+            var m = Object.Instantiate(SoulModelFor(rare), root);
+            m.name = "model";
+            m.transform.localPosition = Vector3.zero; m.transform.localRotation = Quaternion.identity;
+            m.transform.localScale = Vector3.one * SoulModelScale;
+            foreach (var c in m.GetComponentsInChildren<Collider>()) Object.Destroy(c);
+            // おばけなので、ほんのり自分で光らせる（車掌と同じやり方）
+            foreach (var rd in m.GetComponentsInChildren<Renderer>())
+            {
+                var src = rd.sharedMaterials; var dst = new Material[src.Length];
+                for (int k = 0; k < src.Length; k++) dst[k] = GlowCopy(src[k]);
+                rd.sharedMaterials = dst;
+            }
+        }
+
+        // 同じマテリアルは1回だけ作って使い回す
+        static Material GlowCopy(Material src)
+        {
+            if (src == null || !src.HasProperty("_EmissionColor")) return src;
+            if (glowMats.TryGetValue(src, out var done) && done != null) return done;
+            var mt = new Material(src);
+            mt.EnableKeyword("_EMISSION");
+            var baseCol = mt.HasProperty("_BaseColor") ? mt.GetColor("_BaseColor") : Color.white;
+            if (mt.HasProperty("_BaseMap") && mt.GetTexture("_BaseMap") != null) { mt.SetTexture("_EmissionMap", mt.GetTexture("_BaseMap")); mt.SetColor("_EmissionColor", new Color(0.55f, 0.55f, 0.55f)); }
+            else mt.SetColor("_EmissionColor", baseCol * 0.35f);
+            glowMats[src] = mt;
+            return mt;
+        }
         // ---------- 光・影のテクスチャ ----------
         static Material TexMat(Texture2D tex)
         {

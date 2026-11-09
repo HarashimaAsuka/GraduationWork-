@@ -32,7 +32,10 @@ namespace ShoryoumaTaxi
         public GameObject hozukiPrefab;
         public GameObject tonguePrefab;
         public GameObject soulPrefab;
-
+        [Header("魂の色違い（班のモデル。FBX をそのまま入れる。空なら仮のモデル）")]
+        [Tooltip("Element 0=白（ふつう） 1=紫（珍しい） 2=黄（とても珍しい）")]
+        public GameObject[] soulColorModels = new GameObject[3];
+        [Tooltip("魂のモデルの大きさ")] public float soulModelScale = 1.15f;
         [Header("車掌（Blender のモデル。FBX にして入れる。空なら仮のモデル）")]
         public GameObject conductorPrefab;
         [Tooltip("車掌の大きさ")] public float conductorScale = 0.7f;
@@ -116,6 +119,7 @@ namespace ShoryoumaTaxi
             Road.L = L;
             jpFont = Font.CreateDynamicFontFromOSFont(new[] { "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Arial Unicode MS" }, 32);
             ModelFactory.Init();
+            ModelFactory.SoulModels = soulColorModels; ModelFactory.SoulModelScale = soulModelScale;
             mpb = new MaterialPropertyBlock();
             LoadSettings();
             LoadProfile();
