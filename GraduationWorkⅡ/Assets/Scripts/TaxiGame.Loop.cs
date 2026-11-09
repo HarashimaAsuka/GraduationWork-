@@ -10,6 +10,10 @@ namespace ShoryoumaTaxi
     {
         void Update()
         {
+            Debug.LogError(
+            $"[Update確認] ID={GetInstanceID()}, cam={(cam == null ? "NULL" : cam.name)}"
+            );
+
             frameDt = Mathf.Min(Time.deltaTime, 0.033f);
             if (Screen.width != lastW || Screen.height != lastH) FitField();
             if (GameInput.MutePressed() && mode != Mode.Name) bgm.Toggle();
@@ -397,6 +401,11 @@ namespace ShoryoumaTaxi
 
         void UpdateAir(float dt)
         {
+            if (cam == null)
+            {
+                Debug.LogError($"[UpdateAir] TaxiGame ID={GetInstanceID()}, cam=NULL");
+                return;
+            }
             bool backAir = dir < 0;
             float camY = cam.transform.position.y;
             bool first = air.Count == 0;
