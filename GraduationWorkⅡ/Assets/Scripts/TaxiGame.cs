@@ -116,31 +116,24 @@ namespace ShoryoumaTaxi
         // ============================================================
         void Start()
         {
-            Debug.LogError("[TG] S1 Start");
 
             Road.L = L;
-            Debug.LogError("[TG] S2 Road");
 
             jpFont = Font.CreateDynamicFontFromOSFont(
                 new[] { "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans",
                         "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Arial Unicode MS" },
                 32
             );
-            Debug.LogError("[TG] S3 Font");
 
             //ModelFactory.Init(); 11100212
             try
             {
                 ModelFactory.Init();
-                Debug.LogError("[TG] S4 ModelFactory SUCCESS");
             }
             catch (System.Exception e)
             {
-                Debug.LogError("[TG] S4 ModelFactory FAILED: " + e);
                 throw;
             }
-            
-            Debug.LogError("[TG] S4 ModelFactory");
 
             ModelFactory.SoulModels = soulColorModels;
             ModelFactory.SoulModelScale = soulModelScale;
@@ -149,8 +142,6 @@ namespace ShoryoumaTaxi
             LoadSettings();
             LoadProfile();
             fx = new GameObject("FX").transform;
-
-            Debug.LogError("[TG] S5 BeforeCamera");
 
             cam = Camera.main;
 
@@ -161,9 +152,6 @@ namespace ShoryoumaTaxi
                 cam = cg.AddComponent<Camera>();
                 cg.AddComponent<AudioListener>();
             }
-
-            Debug.LogError("[TG] S6 CameraCreated");
-
 
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.nearClipPlane = 0.1f; cam.farClipPlane = 420f;
@@ -281,13 +269,6 @@ namespace ShoryoumaTaxi
             FitField();
 
             Debug.Log($"[Start終了] TaxiGame ID={GetInstanceID()}, cam={(cam == null ? "NULL" : cam.name)}");
-        }
-
-        void Awake()
-        {
-            Debug.LogError(
-                $"[Awake確認] ID={GetInstanceID()}, Object={gameObject.name}"
-            );
         }
 
         void OnDestroy()
