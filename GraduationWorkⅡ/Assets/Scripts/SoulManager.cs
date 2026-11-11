@@ -24,41 +24,41 @@ namespace ShoryoumaTaxi
             }
 
             /// <summary>魂に触れた：乗車。乗せていた客がいれば飛ばされる。向きはお客さんしだい。</summary>
-            void Board(Soul s)
-            {
-                s.gone = true;
-                effectManager.Burst(new Vector3(s.x, s.y, s.z), new Color(0.62f, 0.9f, 1f), 20, 3.5f);
-                if (carrying)
-                {
-                    LaunchFlying(new Vector3(px, y + 1, pz), false);
-                    thrown++; sfx.Play(sfx.swap);
-                    Say("「ひゃあっ！」乗っていたお客さんが飛ばされた！", 2.8f);
-                }
-                else sfx.Play(sfx.catchSilk);
-                carrying = true; steed.rider.SetActive(true);
+            // void Board(Soul s)
+            // {
+            //     s.gone = true;
+            //     effectManager.Burst(new Vector3(s.x, s.y, s.z), new Color(0.62f, 0.9f, 1f), 20, 3.5f);
+            //     if (carrying)
+            //     {
+            //         LaunchFlying(new Vector3(px, y + 1, pz), false);
+            //         thrown++; sfx.Play(sfx.swap);
+            //         Say("「ひゃあっ！」乗っていたお客さんが飛ばされた！", 2.8f);
+            //     }
+            //     else sfx.Play(sfx.catchSilk);
+            //     carrying = true; steed.rider.SetActive(true);
             
-                float roomUp = L - 45 - y, roomDown = y - 45;
-                var can = new List<int>();
-                if (roomUp > 220) can.Add(1);
-                if (roomDown > 220) can.Add(-1);
-                int nd = can.Count == 2 ? (Random.value < 0.5f ? want : -want) : can.Count == 1 ? can[0] : -want;
+            //     float roomUp = L - 45 - y, roomDown = y - 45;
+            //     var can = new List<int>();
+            //     if (roomUp > 220) can.Add(1);
+            //     if (roomDown > 220) can.Add(-1);
+            //     int nd = can.Count == 2 ? (Random.value < 0.5f ? want : -want) : can.Count == 1 ? can[0] : -want;
 
-                float gy;
-                if (nd < 0) { float hi = y - 200; if (hi < 50) hi = y - 40; gy = R(Mathf.Max(45, y - 600), Mathf.Max(46, hi)); }
-                else { float lo = y + 200; if (lo > L - 50) lo = y + 40; gy = R(Mathf.Min(L - 46, lo), Mathf.Min(L - 45, y + 600)); }
-                var zone = STOPS[Mathf.Clamp(gy / L < 0.2f ? 0 : gy / L < 0.45f ? 1 : gy / L < 0.7f ? 2 : 3, 0, 3)];
-                goal = new Goal { y = gy, goalName = zone[Random.Range(0, zone.Length)] };
-                gateLabel.text = "行き先\n" + goal.goalName;
+            //     float gy;
+            //     if (nd < 0) { float hi = y - 200; if (hi < 50) hi = y - 40; gy = R(Mathf.Max(45, y - 600), Mathf.Max(46, hi)); }
+            //     else { float lo = y + 200; if (lo > L - 50) lo = y + 40; gy = R(Mathf.Min(L - 46, lo), Mathf.Min(L - 45, y + 600)); }
+            //     var zone = STOPS[Mathf.Clamp(gy / L < 0.2f ? 0 : gy / L < 0.45f ? 1 : gy / L < 0.7f ? 2 : 3, 0, 3)];
+            //     goal = new Goal { y = gy, goalName = zone[Random.Range(0, zone.Length)] };
+            //     gateLabel.text = "行き先\n" + goal.goalName;
 
-                bool turned = nd != want;
-                want = nd;
-                Say($"「{goal.goalName}まで、お願いします」 {(turned ? "折り返して" : "このまま")}{(nd > 0 ? "上へ" : "下へ")}", 3.4f);
-                if (flags.Add("boardTip"))
-                {
-                    Say("そのまま進むか、折り返すかは、お客さんしだい。", 3f);
-                    Say("乗せている間は、ほかの魂に触れないように。", 3.6f);
-                }
-            }
+            //     bool turned = nd != want;
+            //     want = nd;
+            //     Say($"「{goal.goalName}まで、お願いします」 {(turned ? "折り返して" : "このまま")}{(nd > 0 ? "上へ" : "下へ")}", 3.4f);
+            //     if (flags.Add("boardTip"))
+            //     {
+            //         Say("そのまま進むか、折り返すかは、お客さんしだい。", 3f);
+            //         Say("乗せている間は、ほかの魂に触れないように。", 3.6f);
+            //     }
+            // }
             /// <summary>行き先に着いた：運賃をもらって折り返す。</summary>
             void Deliver()
             {

@@ -73,7 +73,7 @@ namespace ShoryoumaTaxi
                 Shots.Add(new Shot
                 {
                     go = go,
-                    onibi = onibi,
+                    type = onibi ? "onibi" : "seed",
                     x = e.x,
                     y = e.y,
                     z = e.z,

@@ -1,15 +1,27 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Random = UnityEngine.Random;   // System.Random と取り違えないように
 
 namespace ShoryoumaTaxi
 {
     /// <summary>
-    /// 精霊馬タクシーの本体。空のシーンの空オブジェクトにこれを1つ付ければ遊べる。
+    /// 「○○タクシー地獄営業所」の本体（Web版 v32 に合わせたもの）。空のシーンの空オブジェクトにこれを1つ付ければ遊べる。
     ///
     /// 座標の決まり（Web版と同じ）：
-    ///   y  … 道の高さ。0 が地獄、roadLength が現世。
-    ///   x,z … 道の断面上の位置。プレイヤーはこの平面を動く。
-    ///   カメラは常に +y（上）を見上げ、画面の上が +z になる。
+    ///   y  … 道の高さ。0 が地獄、L(2200) が現世。
+    ///   x,z … 道の中心からのずれ（道は曲がっている。中心は Road.Cx / Cz）。プレイヤーはこの平面を動く。
+    ///   カメラは道の先（+y）を見上げ、画面の上が +z になる（Unity では画面の右が -x）。
+    ///
+    /// ステージ：1「送り」・2「帰り」（世界を上下反転して、現世から地獄へ帰る）・3「幻の三日目」（大ボス）。
+    /// ファイルの分け方：
+    ///   TaxiGame.cs        … 部品の用意・ステージの開始と終わり・共通の道具
+    ///   TaxiGame.Stages.cs … ステージの配置表（お客さん・アイテム・敵の波）
+    ///   TaxiGame.Play.cs   … 乗せる・降ろす・ぶつかる・アイテム
+    ///   TaxiGame.Enemies.cs… 敵の撃ち方・敵の波・奥から飛んでくる敵
+    ///   TaxiGame.Boss.cs   … 親玉
+    ///   TaxiGame.Loop.cs   … 毎フレームの進行（Web版の update）
+    ///   TaxiGame.Render.cs … 毎フレームの見た目（Web版の render）
+    ///   TaxiGame.HUD.cs    … 画面表示（IMGUI）
     /// </summary>
     public partial class TaxiGame : MonoBehaviour
     {
@@ -20,116 +32,235 @@ namespace ShoryoumaTaxi
         public GameObject hozukiPrefab;
         public GameObject tonguePrefab;
         public GameObject soulPrefab;
+        [Header("魂の色違い（班のモデル。FBX をそのまま入れる。空なら仮のモデル）")]
+        [Tooltip("Element 0=白（ふつう） 1=紫（珍しい） 2=黄（とても珍しい）")]
+        public GameObject[] soulColorModels = new GameObject[3];
+        [Tooltip("魂のモデルの大きさ")] public float soulModelScale = 1.15f;
+        [Header("車掌（Blender のモデル。FBX にして入れる。空なら仮のモデル）")]
+        public GameObject conductorPrefab;
+        [Tooltip("車掌の大きさ")] public float conductorScale = 0.7f;
+        [Tooltip("馬の背からの位置（原点は頭の中心）")] public Vector3 conductorOffset = new Vector3(0, 0.45f, 0);
+        [Tooltip("向きの調整（FBX の向きが合わないとき）")] public Vector3 conductorEuler = Vector3.zero;
 
-        PlayerController playerController;
-        ProjectileManager projectileManager;
+        // 設定画面で切り替える（PlayerPrefs に保存）
+        [System.NonSerialized] public bool mouseFollow = false;
 
-        [Header("ルール")]
-        public float roadLength = 1500f;
-        public int goalCount = 5;
-        public int fare = 6;
-        [Tooltip("上り（きゅうり）の速さ")] public float speedUp = 16f;
-        [Tooltip("下り（ナス）の速さ")] public float speedDown = 10f;
-        [Tooltip("塩1発で減る水分")] public float saltCost = 0.7f;
+        // ---- 決まりごと（Web版 v32 と同じ） ----
+        const float L = 2200f, V_GO = 16f, V_BACK = 10f, CAMF = 0.5f, CAM_BACK = 7f, CAM_UP = 1.6f, WARN_RANGE = 34f, FOV_UP = 66f, DOWN_GAP = 15f;
+        const float WEB_R = 1.9f, saltCost = 0.5f, SLOW_PER = 0.10f;
+        const int MAX_RIDERS = 5, FARE = 6, FARE_PER_10JO = 1, AIR_N = 170, PART_N = 500;
 
-        [Header("カメラ")]
-        public float camBackUp = 7f;
-        public float camBackDown = 34f;
-        public float fovUp = 66f;
-        public float fovDown = 44f;
-
-        [Header("操作")]
-        [Tooltip("オンにするとマウスの位置に馬がついていく")] public bool mouseFollow = false;
-
-        const float CAMF = 0.5f, CAM_UP = 1.6f, WARN_RANGE = 34f, WEB_R = 1.9f;
-
-        struct Msg { public string text; public float dur, t0; }
-
-        static readonly string[][] STOPS = {
-            new[] { "閻魔庁前", "血の池地獄", "針の山ふもと" },
-            new[] { "三途の川 渡し場", "賽の河原", "奪衣婆の茶屋" },
-            new[] { "雲の上の停留所", "雷さまの太鼓前", "天の浮橋" },
-            new[] { "迎え火の家", "盆踊りのやぐら", "縁側の仏壇" },
-        };
+        struct Msg { public string text; public float dur, at, t0; }
 
         // ===================== 状態 =====================
-        enum Mode { Title, Play, Pause, Result }
+        enum Mode { Title, Play, Pause, Result, Shop, Book, Name }
         Mode mode = Mode.Title;
 
-        float L;
-        float t, y, yPrev, vel, bk, px, pz, water, silk, cool, inv, soulCD, hurtT, webGlow, shake, step, clearT, overT, shrink = 1f;
-        int dir = 1, want = 1, kills, fired, caught, delivered, mon, thrown, lastStep;
-        bool silkLock, guarding, over, carrying;
-        Goal goal;
+        int stage = 1; StageDef st;
+        float t, y, yPrev, vel, bk, px, pz, water, cool, inv, hurtT, shake, step, clearT, overT, overDelay = 1.5f, shrink = 1f;
+        float timeLeft, fineFlash, chaseCD, escCD, wind, backT;
+        int dir = 1, want = 1, kills, fired, delivered, mon, thrown, flips;
+        bool over, timeUp, charmOn; string endOut;
+        readonly List<Goal> riders = new List<Goal>();
         readonly List<Enemy> enemies = new List<Enemy>();
         readonly List<Soul> souls = new List<Soul>();
-        List<Shot> shots => projectileManager.Shots;
-        List<Salt> salts => projectileManager.Salts;
+        readonly List<Pickup> items = new List<Pickup>();
+        readonly List<Mover> movers = new List<Mover>();
+        readonly List<Chaser> chasers = new List<Chaser>();
+        readonly List<Shot> shots = new List<Shot>();
+        readonly List<Salt> salts = new List<Salt>();
         readonly List<Flying> flying = new List<Flying>();
-        readonly Queue<Msg> msgQ = new Queue<Msg>();
+        bool[] waveDone = new bool[0];
+        readonly Dictionary<string, int> waveLeft = new Dictionary<string, int>();
+        Boss boss;
+        readonly List<Msg> msgQ = new List<Msg>();
         Msg? msg;
         readonly HashSet<string> flags = new HashSet<string>();
-        bool resultClear; string resultTitle, resultText;
+        bool resultClear, resultNext; string resultTitle, resultText;
 
         // ===================== シーン部品 =====================
-        Camera cam;
+        Camera cam, mirrorCam;
+        RenderTexture mirrorRT;
         World world;
-        Sfx sfx;
+        Sfx sfx; Bgm bgm;
         ModelFactory.Steed steed;
-        GameObject gate; TextMesh gateLabel;
-        GameObject web; MaterialPropertyBlock mpb;
+        readonly GameObject[] riderGo = new GameObject[MAX_RIDERS];
+        readonly int[] riderRare = new int[MAX_RIDERS];
+        Transform conductorRoot, conductorModel; ModelFactory.ConductorModel conductorFallback;
+        readonly GameObject[] gates = new GameObject[MAX_RIDERS];
+        readonly Renderer[] gateDisc = new Renderer[MAX_RIDERS];
+        readonly ModelFactory.Plate[] gateLabels = new ModelFactory.Plate[MAX_RIDERS];
         LineRenderer thread;
-        EffectManager effectManager;
+        Light horseLight;
+        MaterialPropertyBlock mpb;
+        Transform fx;   // 効果の入れ物
 
-        Mesh airMesh; Vector3[] airV; Color[] airC; readonly List<Vector4> air = new List<Vector4>(); // x,y,z,vy
-        readonly List<Spark> sparks = new List<Spark>();
+        struct AirP { public float x, y, z, vy; public Color c; }
+        Mesh airMesh; Vector3[] airV; Color[] airC; readonly List<AirP> air = new List<AirP>();
+        class Part { public Vector3 p, v; public float life, max; public Color c; }
+        readonly List<Part> parts = new List<Part>();
+        MeshKit.QuadCloud partCloud;
         readonly List<GameObject> warnRings = new List<GameObject>();
         readonly List<GameObject> reticles = new List<GameObject>();
-        readonly List<(GameObject go, float life)> hoof = new List<(GameObject, float)>();
+        readonly List<(GameObject root, Renderer soft, Renderer sharp)> shadows = new List<(GameObject, Renderer, Renderer)>();
+        readonly List<(GameObject ring, GameObject ripple)> soulRings = new List<(GameObject, GameObject)>();
+        readonly List<(GameObject go, Renderer rd)> swoopGlows = new List<(GameObject, Renderer)>();
+        class TRing { public GameObject g; public Material[] mats; public Transform o2; }
+        readonly List<TRing> tRings = new List<TRing>();
+        readonly List<(GameObject go, Material mat)> tBands = new List<(GameObject, Material)>();
         Font jpFont;
         float RX = 5, RZ = 3.3f; int lastW, lastH;
-        float camFX, camFZ, frameDt = 1f / 60f;
-        const int AIR_N = 110;
+        float camFX, camFZ, frameDt = 1f / 60f, camRoll, lookX, lookZ;
+        Vector3 camPos;
 
         // ============================================================
         void Start()
         {
-            L = roadLength;
-            jpFont = Font.CreateDynamicFontFromOSFont(new[] { "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Arial Unicode MS" }, 32);
-            ModelFactory.Init();
-            projectileManager = new ProjectileManager();
+            Debug.LogError("[TG] S1 Start");
+
+            Road.L = L;
+            Debug.LogError("[TG] S2 Road");
+
+            jpFont = Font.CreateDynamicFontFromOSFont(
+                new[] { "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans",
+                        "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Arial Unicode MS" },
+                32
+            );
+            Debug.LogError("[TG] S3 Font");
+
+            //ModelFactory.Init(); 11100212
+            try
+            {
+                ModelFactory.Init();
+                Debug.LogError("[TG] S4 ModelFactory SUCCESS");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("[TG] S4 ModelFactory FAILED: " + e);
+                throw;
+            }
+            
+            Debug.LogError("[TG] S4 ModelFactory");
+
+            ModelFactory.SoulModels = soulColorModels;
+            ModelFactory.SoulModelScale = soulModelScale;
+
             mpb = new MaterialPropertyBlock();
+            LoadSettings();
+            LoadProfile();
+            fx = new GameObject("FX").transform;
+
+            Debug.LogError("[TG] S5 BeforeCamera");
+
             cam = Camera.main;
-            if (cam == null) { var cg = new GameObject("Main Camera"); cg.tag = "MainCamera"; cam = cg.AddComponent<Camera>(); cg.AddComponent<AudioListener>(); }
+
+            if (cam == null)
+            {
+                var cg = new GameObject("Main Camera");
+                cg.tag = "MainCamera";
+                cam = cg.AddComponent<Camera>();
+                cg.AddComponent<AudioListener>();
+            }
+
+            Debug.LogError("[TG] S6 CameraCreated");
+
+
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.nearClipPlane = 0.1f; cam.farClipPlane = 320f;
-            cam.fieldOfView = fovUp;
+            cam.nearClipPlane = 0.1f; cam.farClipPlane = 420f;
+            cam.fieldOfView = FOV_UP;
+
+            // バックミラー用のカメラ：カメラの後ろ（下＝手前）を見る。映像は HUD で左右反転して貼る
+            var mg = new GameObject("Mirror Camera");
+            mirrorCam = mg.AddComponent<Camera>();
+            mirrorCam.clearFlags = CameraClearFlags.SolidColor;
+            mirrorCam.fieldOfView = 62f; mirrorCam.nearClipPlane = 0.5f; mirrorCam.farClipPlane = 90f;
+            mirrorRT = new RenderTexture(760, 316, 16) { name = "MirrorRT" };
+            mirrorCam.targetTexture = mirrorRT;
+            mirrorCam.enabled = false;
+            UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering += OnBeginCamera;
+            UnityEngine.Rendering.RenderPipelineManager.endCameraRendering += OnEndCamera;
 
             if (FindFirstObjectByType<Light>() == null)
             {
                 var lg = new GameObject("Directional Light"); var l = lg.AddComponent<Light>();
-                l.type = LightType.Directional; l.intensity = 0.8f; lg.transform.rotation = Quaternion.Euler(60f, 30f, 0);
+                l.type = LightType.Directional; l.intensity = 0.7f; lg.transform.rotation = Quaternion.Euler(60f, 30f, 0);
             }
+            horseLight = new GameObject("Horse Light").AddComponent<Light>();
+            horseLight.type = LightType.Point; horseLight.color = ModelFactory.Hex(0xffd8a0); horseLight.intensity = 1.2f; horseLight.range = 18f;
             RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
 
             world = new World(L);
             sfx = new Sfx(gameObject);
+            bgm = new Bgm(gameObject);
             steed = ModelFactory.BuildSteed(cucumberPrefab, nasuPrefab, soulPrefab);
-            playerController = new PlayerController(steed);
-            gate = ModelFactory.Gate(out gateLabel, jpFont); gate.SetActive(false); gateLabel.gameObject.SetActive(false);
+            steed.rider.SetActive(false);
+            // 乗っているお客さん：馬の背に、頭からしっぽへ5人まで並ぶ
+            for (int i = 0; i < MAX_RIDERS; i++)
+            {
+                var m = ModelFactory.Soul(soulPrefab);
+                m.transform.SetParent(steed.root.transform, false);
+                m.transform.localPosition = new Vector3(0, 1.0f, 0.3f - i * 0.42f);
+                m.transform.localScale = Vector3.one * 0.42f;
+                m.SetActive(false); riderGo[i] = m; riderRare[i] = 0;
+            }
+            BuildConductor();
+            for (int i = 0; i < MAX_RIDERS; i++)
+            {
+                gates[i] = ModelFactory.DestGate(out gateDisc[i]); gates[i].SetActive(false);
+                gateLabels[i] = ModelFactory.MakeLabel(jpFont, 7f, 1.75f, "行き先", ModelFactory.Hex(0xffd9a0), Color.white, ModelFactory.Hex(0xff7a5a), 0.42f, 0.75f);
+            }
 
             var vc = Mats.VertexColor();
-            web = LineObj("web", WebMesh(), vc);
-            web.SetActive(false);
             for (int i = 0; i < 16; i++) { var w = LineObj("warn", MeshKit.CircleLines(1f, 40, Color.white), vc); w.SetActive(false); warnRings.Add(w); }
             reticles.Add(LineObj("reticle", MeshKit.CircleLines(0.46f, 32, Color.white), vc));
             reticles.Add(LineObj("reticle", MeshKit.CircleLines(0.64f, 32, Color.white), vc));
-            for (int i = 0; i < 10; i++) { var h = LineObj("hoof", MeshKit.CircleLines(0.56f, 32, new Color(0.72f, 1f, 0.56f)), vc); h.SetActive(false); hoof.Add((h, 0f)); }
+            // お客さんのまわりに出す光の輪（輪と、広がる波紋）
+            for (int i = 0; i < 8; i++)
+            {
+                var a = LineObj("soulRing", MeshKit.CircleLines(0.96f, 40, Color.white), vc); a.SetActive(false);
+                var b = LineObj("soulRipple", MeshKit.CircleLines(1.2f, 40, Color.white), vc); b.SetActive(false);
+                soulRings.Add((a, b));
+            }
+            // 後ろ向きの影：地獄の火に照らされて、手前（下）にいるものの影が馬の手前に映る
+            for (int i = 0; i < 18; i++)
+            {
+                var root = new GameObject("shadow");
+                var soft = ModelFactory.Prim(PrimitiveType.Quad, root.transform, Vector3.zero, Vector3.one * 1.25f, ModelFactory.ShadowMat("soul", true));
+                var sharp = ModelFactory.Prim(PrimitiveType.Quad, root.transform, new Vector3(0, 0, -0.01f), Vector3.one, ModelFactory.ShadowMat("soul", false));
+                root.SetActive(false);
+                shadows.Add((root, soft.GetComponent<Renderer>(), sharp.GetComponent<Renderer>()));
+            }
+            // v28：後ろ向きのとき、横の景色の奥から飛んでくるものの光
+            for (int i = 0; i < 14; i++)
+            {
+                var g = ModelFactory.Glow(fx, ModelFactory.GlowMat(new Color(1, 0.19f, 0.31f, 0.7f)), 5f, Vector3.zero);
+                g.SetActive(false); swoopGlows.Add((g, g.GetComponent<Renderer>()));
+            }
+            // 親玉の合図：突進・叩きつけの赤い輪と、薙ぎ払いの赤い帯（いつも手前に描く）
+            for (int i = 0; i < 3; i++)
+            {
+                var tr = new TRing { g = new GameObject("tRing"), mats = new Material[4] };
+                tr.g.transform.SetParent(fx, false);
+                Mesh[] ms = { MeshKit.Ring(2.75f, 3.05f, 48), MeshKit.Disc(2.75f, 48), MeshKit.Disc(0.35f, 16), MeshKit.Ring(3.3f, 3.42f, 48) };
+                for (int k = 0; k < 4; k++)
+                {
+                    tr.mats[k] = ModelFactory.OverlayMat(new Color(1, 0.19f, 0.19f, 0.5f), 3050 + k);
+                    var o = ModelFactory.MeshObj("r", ms[k], tr.g.transform, tr.mats[k], Vector3.zero, Vector3.one, new Vector3(90, 0, 0));
+                    if (k == 3) tr.o2 = o.transform;
+                }
+                tr.g.SetActive(false); tRings.Add(tr);
+            }
+            for (int i = 0; i < 2; i++)
+            {
+                var m = ModelFactory.OverlayMat(new Color(1, 0.19f, 0.19f, 0.3f), 3049);
+                var g = ModelFactory.Prim(PrimitiveType.Quad, fx, Vector3.zero, Vector3.one, m, new Vector3(90, 0, 0));
+                g.SetActive(false); tBands.Add((g, m));
+            }
 
             thread = new GameObject("thread").AddComponent<LineRenderer>();
             thread.material = vc; thread.widthMultiplier = 0.03f; thread.positionCount = 2;
-            thread.startColor = thread.endColor = new Color(0.87f, 0.91f, 0.95f, 0.7f);
+            thread.startColor = thread.endColor = new Color(0.87f, 0.91f, 0.95f, 0.6f);
             thread.enabled = false;
 
             // 風の筋：1枚のメッシュを毎フレーム書き換える
@@ -140,47 +271,69 @@ namespace ShoryoumaTaxi
             airMesh.SetIndices(ai, MeshTopology.Lines, 0);
             var ago = new GameObject("air"); ago.AddComponent<MeshFilter>().sharedMesh = airMesh; ago.AddComponent<MeshRenderer>().sharedMaterial = vc;
 
-            // 火花（小さな立方体のプール）
-            var sparkMat = Mats.Unlit(Color.white);
-            for (int i = 0; i < 260; i++)
-            {
-                var s = GameObject.CreatePrimitive(PrimitiveType.Cube); Destroy(s.GetComponent<Collider>());
-                s.GetComponent<Renderer>().sharedMaterial = sparkMat; s.SetActive(false);
-                sparks.Add(new Spark { tr = s.transform, rd = s.GetComponent<Renderer>() });
-            }
-            effectManager = new EffectManager(sparkMat);
+            // 火花（光る粒を1枚のメッシュに並べる）
+            partCloud = new MeshKit.QuadCloud(PART_N);
+            for (int i = 0; i < PART_N; i++) partCloud.Hide(i);
+            var pm = Mats.VertexColor(); pm.mainTexture = ModelFactory.GlowTex;
+            var pgo = new GameObject("sparks"); pgo.AddComponent<MeshFilter>().sharedMesh = partCloud.mesh; pgo.AddComponent<MeshRenderer>().sharedMaterial = pm;
 
-            NewGame();
+            NewGame(1);
             FitField();
+
+            Debug.Log($"[Start終了] TaxiGame ID={GetInstanceID()}, cam={(cam == null ? "NULL" : cam.name)}");
+        }
+
+        void Awake()
+        {
+            Debug.LogError(
+                $"[Awake確認] ID={GetInstanceID()}, Object={gameObject.name}"
+            );
+        }
+
+        void OnDestroy()
+        {
+            UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+            UnityEngine.Rendering.RenderPipelineManager.endCameraRendering -= OnEndCamera;
+            if (mirrorRT != null) { mirrorRT.Release(); Destroy(mirrorRT); }
         }
 
         GameObject LineObj(string name, Mesh m, Material mat)
         {
             var g = new GameObject(name);
+            g.transform.SetParent(fx, false);
             g.AddComponent<MeshFilter>().sharedMesh = m;
             g.AddComponent<MeshRenderer>().sharedMaterial = mat;
             return g;
         }
 
-        static Mesh WebMesh()
+        /// <summary>v24：車掌 —— 馬の首のつけ根にまたがって手綱を握る。Blender のモデル（conductorPrefab）があればそれを使う。</summary>
+        void BuildConductor()
         {
-            var v = new List<Vector3>(); var c = new List<Color>(); var idx = new List<int>();
-            int spokes = 10;
-            void Seg(Vector3 a, Vector3 b) { idx.Add(v.Count); v.Add(a); c.Add(Color.white); idx.Add(v.Count); v.Add(b); c.Add(Color.white); }
-            for (int i = 0; i < spokes; i++) { float a = i * Mathf.PI * 2f / spokes; Seg(Vector3.zero, new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a))); }
-            for (int ring = 1; ring <= 5; ring++)
+            conductorRoot = new GameObject("車掌").transform;
+            conductorRoot.SetParent(steed.root.transform, false);
+            conductorRoot.localPosition = new Vector3(0, 0.3f, 0.72f);
+            if (conductorPrefab != null)
             {
-                float rr = ring / 5f;
-                for (int i = 0; i < spokes; i++)
-                {
-                    float a0 = i * Mathf.PI * 2f / spokes, a1 = (i + 1) * Mathf.PI * 2f / spokes, am = (a0 + a1) / 2f, sag = rr * 0.9f;
-                    var p0 = new Vector3(Mathf.Cos(a0) * rr, 0, Mathf.Sin(a0) * rr);
-                    var pm = new Vector3(Mathf.Cos(am) * sag, 0, Mathf.Sin(am) * sag);
-                    var p1 = new Vector3(Mathf.Cos(a1) * rr, 0, Mathf.Sin(a1) * rr);
-                    Seg(p0, pm); Seg(pm, p1);
-                }
+                var wrap = new GameObject("車掌のモデル").transform; wrap.SetParent(conductorRoot, false);
+                var m = Instantiate(conductorPrefab, wrap);
+                m.transform.localPosition = Vector3.zero; m.transform.localRotation = Quaternion.Euler(conductorEuler);
+                m.transform.localScale = Vector3.one * conductorScale;
+                wrap.localPosition = conductorOffset;
+                foreach (var c in m.GetComponentsInChildren<Collider>()) Destroy(c);
+                // おばけなので、ほんのり自分で光らせて、地獄の赤い光の中でも白く見えるようにする
+                foreach (var rd in m.GetComponentsInChildren<Renderer>())
+                    foreach (var mt in rd.materials)
+                    {
+                        if (!mt.HasProperty("_EmissionColor")) continue;
+                        mt.EnableKeyword("_EMISSION");
+                        var baseCol = mt.HasProperty("_BaseColor") ? mt.GetColor("_BaseColor") : Color.white;
+                        if (mt.HasProperty("_BaseMap") && mt.GetTexture("_BaseMap") != null) { mt.SetTexture("_EmissionMap", mt.GetTexture("_BaseMap")); mt.SetColor("_EmissionColor", new Color(0.55f, 0.55f, 0.55f)); }
+                        else mt.SetColor("_EmissionColor", baseCol * 0.35f);
+                    }
+                ModelFactory.GlowQ(wrap, 0xdff4ff, 2.2f, 0.35f, new Vector3(0, 0, -0.3f));
+                conductorModel = wrap;
             }
-            return MeshKit.Lines(v, c, idx);
+            else conductorFallback = ModelFactory.Conductor(conductorRoot);
         }
 
         /// <summary>画面の縦横比から、馬が動ける楕円の大きさを決める。</summary>
@@ -188,87 +341,154 @@ namespace ShoryoumaTaxi
         {
             lastW = Screen.width; lastH = Screen.height;
             float aspect = (float)Screen.width / Mathf.Max(1, Screen.height);
-            float hh = Mathf.Tan(fovUp * Mathf.Deg2Rad / 2f) * camBackUp, hw = hh * aspect;
+            float hh = Mathf.Tan(FOV_UP * Mathf.Deg2Rad / 2f) * CAM_BACK, hw = hh * aspect;
             RX = Mathf.Clamp((0.85f * hw - 0.6f) / (1 - CAMF), 2.6f, 7f);
             RZ = Mathf.Clamp((0.85f * hh - CAM_UP - 0.6f) / (1 - CAMF), 2.2f, 5.5f);
-            world.FitShaft(RX, RZ);
         }
+
+        /// <summary>社名の表示を更新する（v32 は背中の行灯を出さないので、画面の文字だけ）。</summary>
+        void ApplyName() { }
 
         // ============================================================
         //  ゲームの開始・終了
         // ============================================================
-        void NewGame()
+        void ClearGame()
         {
             foreach (var e in enemies) Destroy(e.go); enemies.Clear();
-            foreach (var s in souls) Destroy(s.go); souls.Clear();
-            
-            projectileManager.ClearAll();
-
+            foreach (var s in souls) { Destroy(s.go); if (s.tag != null) Destroy(s.tag.root); } souls.Clear();
+            foreach (var it in items) { Destroy(it.im.root); Destroy(it.tag.root); } items.Clear();
+            foreach (var m in movers) Destroy(m.go); movers.Clear();
+            ClearChasers();
+            foreach (var s in shots) Destroy(s.go); shots.Clear();
+            foreach (var s in salts) Destroy(s.go); salts.Clear();
             foreach (var f in flying) Destroy(f.go); flying.Clear();
-            air.Clear(); msgQ.Clear(); msg = null; flags.Clear();
-
-            t = 0; y = yPrev = 30; vel = 0; dir = want = 1; bk = 0; px = 0; pz = 0.6f;
-            water = 100; silk = 100; silkLock = guarding = over = carrying = false; cool = inv = 0; soulCD = 1;
-            kills = fired = caught = delivered = mon = thrown = 0; hurtT = webGlow = shake = step = clearT = overT = 0; shrink = 1; lastStep = 0;
-            goal = null;
-            steed.rider.SetActive(false); gate.SetActive(false); gateLabel.gameObject.SetActive(false);
-            MakeEnemies();
+            if (boss != null)
+            {
+                Destroy(boss.m.root);
+                foreach (var h in boss.hands) Destroy(h.go);
+                if (boss.guards != null) foreach (var gd in boss.guards) Destroy(gd.go);
+                boss = null;
+            }
+            riders.Clear(); air.Clear(); parts.Clear(); msgQ.Clear(); msg = null; flags.Clear(); waveLeft.Clear();
         }
 
-        void StartGame()
+        void NewGame(int no)
         {
-            NewGame(); mode = Mode.Play;
-            cool = 0.5f;   // 開始ボタンのクリックで塩が出ないように
-            Say("精霊馬タクシー、営業開始。", 2.6f);
-            Say("青く光る魂がお客さん。触れると乗せられる。", 3.4f);
-            Say("左クリックで塩。撃つほど、馬は干からびる。", 3.4f);
+            ClearGame();
+            stage = Mathf.Clamp(no, 1, 3);
+            st = STAGES[stage - 1];
+            // v23：ステージ2は世界を上下反転（前が地獄・後ろが現世）、ステージ3は夢の色
+            Road.Flip = stage == 2;
+            world.SetStage(stage);
+            float y0 = st.boss ? L - 1320 : 30;   // 親玉戦は出口まで1320丈
+            t = 0; y = yPrev = y0; vel = 0; dir = want = 1; bk = 0; px = 0; pz = 0.6f;
+            water = 100; cool = inv = 0; hurtT = shake = step = clearT = overT = 0; overDelay = 1.5f; shrink = 1;
+            kills = fired = delivered = mon = thrown = flips = 0;
+            over = timeUp = charmOn = false; endOut = null;
+            timeLeft = st.time; fineFlash = 0; chaseCD = 2; escCD = 4; wind = 0; backT = 0;
+            waveDone = new bool[st.waves.Length];
+            MakeEnemies(); MakeSouls(); MakeItems();
+            if (st.boss) MakeBoss();
+            for (int i = 0; i < MAX_RIDERS; i++) { riderGo[i].SetActive(false); gates[i].SetActive(false); gateLabels[i].root.SetActive(false); }
         }
+
+        /// <summary>「営業を始める」：社名が決まっていなければ先に決めてもらう。</summary>
+        int nameStage = 1;
+        void Begin(int no)
+        {
+            if (string.IsNullOrEmpty(coNameRaw)) { nameStage = no; OpenName(Mode.Play); }
+            else StartStage(no);
+        }
+
+        void StartStage(int no)
+        {
+            NewGame(no); mode = Mode.Play;
+            bgm.Play(stage);
+            cool = 0.4f;   // 開始ボタンのクリックで塩が出ないように
+            Say($"{CoName()}タクシー地獄営業所　ステージ{st.no}「{st.name}」", 2.6f);
+            Say($"{st.goal}。制限時間 {Mathf.FloorToInt(st.time / 60)}分{(st.time % 60 != 0 ? (st.time % 60) + "秒" : "")}", 3f);
+            if (st.no == 1)
+            {
+                Say("魂の上の札が行き先。選んで乗せよう。5人まで乗れるが、乗せるほど遅くなる。", 4f);
+                Say("左クリックで塩。撃つほど、馬は干からびる。", 3.4f);
+                Say("敵にぶつかると向きが反転し、お客さんを1人落とす。もう一度ぶつかると元に戻る。", 4.2f);
+            }
+            else if (st.boss) Say("親玉は塩で祓う。体当たりと種の雨に気をつけて。", 3.4f);
+        }
+
+        void ToTitle() { bgm.Stop(); NewGame(1); mode = Mode.Title; }
+
+        void Pause() { mode = Mode.Pause; bgm.Pause(true); }
 
         void Finish(bool clear)
         {
-            mode = Mode.Result; resultClear = clear;
+            bgm.Stop();
+            mode = Mode.Result; resultClear = clear; resultNext = clear && st.no < 3;
             if (!clear)
             {
-                resultTitle = "干からびた";
-                resultText = carrying && goal != null
-                    ? $"お客さんを乗せたまま、干からびてしまった。\n{goal.goalName}まで、あと {Mathf.CeilToInt(Mathf.Abs(goal.y - y) / 10)} 丈だった。"
+                resultTitle = $"ステージ{st.no}「{st.name}」　" + (endOut != null ? "道の終わりに着いた" : timeUp ? "時間切れ" : "干からびた");
+                int left = boss != null ? Mathf.Max(0, boss.hp) : 0;
+                resultText = st.boss
+                    ? (endOut == "top" ? $"現世の出口に着いてしまった。\n親玉は、あと {left} 発ぶん残したまま、現世へ抜け出した。"
+                      : endOut == "bottom" ? $"地獄の底まで落ちてしまった。\n親玉は、あと {left} 発ぶん残っていた。"
+                      : timeUp ? $"時間切れ。親玉は、あと {left} 発ぶん残っていた。" : "精霊馬は干からびてしまった。親玉はまだ笑っている。")
+                    : timeUp
+                    ? $"時間切れ。送り届けた魂は {delivered} 人。\nノルマの {st.quota} 人まで、あと {Mathf.Max(0, st.quota - delivered)} 人だった。"
                     : $"精霊馬は干からびてしまった。\n送り届けた魂は {delivered} 人。";
             }
             else
             {
-                resultTitle = "本日の営業終了";
-                resultText = thrown == 0
-                    ? $"ひとりも落とさずに、{goalCount} 人の魂を送り届けた。\n{mon} 文の稼ぎ。また来年のお盆に。"
-                    : $"{goalCount} 人の魂を送り届けた。\n途中で飛ばしてしまったお客さんが {thrown} 人。\nまた来年のお盆に。";
+                resultTitle = $"{CoName()}タクシー地獄営業所　ステージ{st.no}「{st.name}」クリア";
+                resultText = st.boss
+                    ? "鬼ザクロの親玉を祓った。\nお盆の三日目の夜が、静かに明けていく。"
+                    : thrown == 0
+                    ? $"ひとりも落とさずに、{delivered} 人の魂を送り届けた。\n残り時間 {Mathf.CeilToInt(timeLeft)} 秒。"
+                    : $"{delivered} 人の魂を送り届けた。\n途中で落としてしまったお客さんが {thrown} 人。";
             }
         }
 
-        void Say(string text, float dur = 3.2f) => msgQ.Enqueue(new Msg { text = text, dur = dur });
+        /// <summary>v23：下の文字はすぐ出す。あとから来たものがあれば今のものは早めに切り上げ、古くなったものは捨てる。</summary>
+        void Say(string text, float dur = 3.2f)
+        {
+            msgQ.Add(new Msg { text = text, dur = Mathf.Min(dur, 2.6f), at = t });
+            if (msgQ.Count > 2) msgQ.RemoveRange(0, msgQ.Count - 2);
+        }
+
+        void UpdateMsg()
+        {
+            while (msgQ.Count > 0 && t - msgQ[0].at > 2.5f) msgQ.RemoveAt(0);
+            bool expired = msg != null && t - msg.Value.t0 > msg.Value.dur;
+            if (msg == null || expired || (msgQ.Count > 0 && t - msg.Value.t0 > 1.1f))
+            {
+                if (msgQ.Count > 0) { var m = msgQ[0]; msgQ.RemoveAt(0); m.t0 = t; msg = m; }
+                else if (expired) msg = null;
+            }
+        }
+
         float Rel(float yy) => (yy - y) * dir;
         static float R(float a, float b) => Random.Range(a, b);
+        static float Smooth(float k) { k = Mathf.Clamp01(k); return k * k * (3 - 2 * k); }
+        static Vector3 WP(float x, float yy, float z) => Road.WP(x, yy, z);
+        static Color Hex(int h) => ModelFactory.Hex(h);
 
-        /// <summary>実際に進む向きが変わった瞬間。飛んでいる弾を片づけ、敵の状態を戻す。</summary>
-        void Flip(int nd)
+        /// <summary>火花：x,z は道の中心からのずれ（遊びの座標）。</summary>
+        void Burst(float x, float yy, float z, Color c, int n, float sp) => BurstW(WP(x, yy, z), c, n, sp);
+        void Burst(float x, float yy, float z, int hex, int n, float sp) => BurstW(WP(x, yy, z), Hex(hex), n, sp);
+
+        void BurstW(Vector3 p, Color c, int n, float sp)
         {
-            dir = nd;
-            projectileManager.ClearAll();
-
-            air.Clear();
-            foreach (var e in enemies) { e.bumped = false; e.emerged = false; }
-            foreach (var s in souls) s.emerged = false;
-            if (nd < 0 && flags.Add("downTip"))
+            for (int i = 0; i < n; i++)
             {
-                Say("下りは塩が撒けない。避けて進もう。糸で受けることはできる。", 3.8f);
-                Say("手前から魂や敵が来る。光る輪が、抜けてくる場所の合図。", 4f);
+                if (parts.Count >= PART_N) parts.RemoveAt(0);
+                float life = R(0.4f, 1f);
+                parts.Add(new Part { p = p, v = Random.onUnitSphere * R(0.4f, 1f) * sp, life = life, max = 1f, c = c });
             }
         }
 
-        void Hurt(float amount)
+        void AddPart(Vector3 p, Vector3 v, float life, Color c)
         {
-            if (inv > 0 || over) return;
-            water -= amount; inv = 1.3f; hurtT = 0.35f; shake = 0.3f;
-            effectManager.Burst(new Vector3(px, y, pz), new Color(0.42f, 0.77f, 0.91f), 14, 3f);
-            sfx.Play(sfx.hurt);
+            if (parts.Count >= PART_N) parts.RemoveAt(0);
+            parts.Add(new Part { p = p, v = v, life = life, max = life, c = c });
         }
     }
 }
