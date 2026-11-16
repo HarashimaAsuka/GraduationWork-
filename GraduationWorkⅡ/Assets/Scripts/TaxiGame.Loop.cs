@@ -10,10 +10,6 @@ namespace ShoryoumaTaxi
     {
         void Update()
         {
-            Debug.LogError(
-            $"[Update確認] ID={GetInstanceID()}, cam={(cam == null ? "NULL" : cam.name)}"
-            );
-
             frameDt = Mathf.Min(Time.deltaTime, 0.033f);
             if (Screen.width != lastW || Screen.height != lastH) FitField();
             if (GameInput.MutePressed() && mode != Mode.Name) bgm.Toggle();
