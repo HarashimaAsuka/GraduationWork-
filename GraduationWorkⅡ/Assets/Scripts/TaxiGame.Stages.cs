@@ -119,32 +119,32 @@ namespace ShoryoumaTaxi
             }
         }
 
-        // void MakeEnemies()
-        // {
-        //     if (st.gap == null) return;
-        //     var r = new Seeded(st.seed * 7 + 1);
-        //     for (float h = 80; h < L - 50; h += st.gap[0] + r.Next() * (st.gap[1] - st.gap[0]))
-        //     {
-        //         int n = r.Next() < 0.15f ? 2 : 1;
-        //         for (int i = 0; i < n; i++)
-        //         {
-        //             float f = h / L;
-        //             string[] names = { "zakuro", "hozuki", "tongue", "kasa", "chochin" };
-        //             float[] w = { 5, f > 0.2f ? 2.2f : 1.2f, f > 0.28f ? st.tongue : 0, f > 0.12f ? 2 * st.yokai : 0, f > 0.3f ? 1.4f * st.yokai : 0 };
-        //             float sum = 0; foreach (var v in w) sum += v;
-        //             float q = r.Next() * sum; string type = "zakuro";
-        //             for (int k = 0; k < w.Length; k++) { q -= w[k]; if (q < 0) { type = names[k]; break; } }
-        //             float a = r.Next() * Mathf.PI * 2, rr = Mathf.Sqrt(r.Next()) * 0.85f;
-        //             var e = new Enemy { type = type, y0 = h + i * 3, nx = Mathf.Cos(a) * rr, nz = Mathf.Sin(a) * rr, hp = TypeHp(type), r = TypeR(type) };
-        //             e.y = e.yPrev = e.y0; e.max = e.hp;
-        //             e.shooter = type != "zakuro" || r.Next() < 0.5f;
-        //             e.cd = 0.4f + r.Next() * 1.6f; e.ph = r.Next() * 6;
-        //             e.go = BuildEnemy(type, out e.body, out e.arils);
-        //             e.go.SetActive(false);
-        //             enemies.Add(e);
-        //         }
-        //     }
-        // }
+        void MakeEnemies()
+        {
+            if (st.gap == null) return;
+            var r = new Seeded(st.seed * 7 + 1);
+            for (float h = 80; h < L - 50; h += st.gap[0] + r.Next() * (st.gap[1] - st.gap[0]))
+            {
+                int n = r.Next() < 0.15f ? 2 : 1;
+                for (int i = 0; i < n; i++)
+                {
+                    float f = h / L;
+                    string[] names = { "zakuro", "hozuki", "tongue", "kasa", "chochin" };
+                    float[] w = { 5, f > 0.2f ? 2.2f : 1.2f, f > 0.28f ? st.tongue : 0, f > 0.12f ? 2 * st.yokai : 0, f > 0.3f ? 1.4f * st.yokai : 0 };
+                    float sum = 0; foreach (var v in w) sum += v;
+                    float q = r.Next() * sum; string type = "zakuro";
+                    for (int k = 0; k < w.Length; k++) { q -= w[k]; if (q < 0) { type = names[k]; break; } }
+                    float a = r.Next() * Mathf.PI * 2, rr = Mathf.Sqrt(r.Next()) * 0.85f;
+                    var e = new Enemy { type = type, y0 = h + i * 3, nx = Mathf.Cos(a) * rr, nz = Mathf.Sin(a) * rr, hp = TypeHp(type), r = TypeR(type) };
+                    e.y = e.yPrev = e.y0; e.max = e.hp;
+                    e.shooter = type != "zakuro" || r.Next() < 0.5f;
+                    e.cd = 0.4f + r.Next() * 1.6f; e.ph = r.Next() * 6;
+                    e.go = BuildEnemy(type, out e.body, out e.arils);
+                    e.go.SetActive(false);
+                    enemies.Add(e);
+                }
+            }
+        }
 
         void MakeSouls()
         {

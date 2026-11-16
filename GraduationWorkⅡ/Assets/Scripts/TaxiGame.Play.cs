@@ -66,17 +66,17 @@ namespace ShoryoumaTaxi
         }
 
         /// <summary>道の端に着いた：自分で折り返す（ステージ2は反転しているので上下が入れ替わる）。</summary>
-        // void TurnAround(bool top)
-        // {
-        //     want = -want;
-        //     if (Road.Flip) top = !top;
-        //     if (top)
-        //     {
-        //         water = Mathf.Min(100, water + 20);
-        //         Say("現世の井戸の口。お供えの水をもらって、後ろへ折り返す。　水分 +20", 3f); sfx.Play(sfx.bell);
-        //     }
-        //     else Say($"{CoName()}タクシー地獄営業所の門。前へ折り返す。", 2.6f);
-        // }
+        void TurnAround(bool top)
+        {
+            want = -want;
+            if (Road.Flip) top = !top;
+            if (top)
+            {
+                water = Mathf.Min(100, water + 20);
+                Say("現世の井戸の口。お供えの水をもらって、後ろへ折り返す。　水分 +20", 3f); sfx.Play(sfx.bell);
+            }
+            else Say($"{CoName()}タクシー地獄営業所の門。前へ折り返す。", 2.6f);
+        }
 
         void TakeItem(Pickup it)
         {
@@ -157,25 +157,25 @@ namespace ShoryoumaTaxi
                 Say(want < 0 ? "向きが反転して、後ろへ進む。もう一度ぶつかると元の向きに戻る。" : "元の向きに戻った。", 3.6f);
         }
 
-        // void Kill(Enemy e)
-        // {
-        //     e.alive = false; e.go.SetActive(false); e.deadT = 0; kills++;
-        //     Burst(e.x, e.y, e.z, KCol(e.type), 26, 4);
-        //     Burst(e.x, e.y, e.z, Color.white, 12, 3);
-        //     sfx.Play(sfx.pop);
-        // }
+        void Kill(Enemy e)
+        {
+            e.alive = false; e.go.SetActive(false); e.deadT = 0; kills++;
+            Burst(e.x, e.y, e.z, KCol(e.type), 26, 4);
+            Burst(e.x, e.y, e.z, Color.white, 12, 3);
+            sfx.Play(sfx.pop);
+        }
 
-        // void Ripen(Enemy e)
-        // {
-        //     e.ripe = true;
-        //     if (e.type == "zakuro" && e.body != null && zakuroPrefab == null) e.body.sharedMaterial = ModelFactory.ZakuroRipeMat;
-        // }
+        void Ripen(Enemy e)
+        {
+            e.ripe = true;
+            if (e.type == "zakuro" && e.body != null && zakuroPrefab == null) e.body.sharedMaterial = ModelFactory.ZakuroRipeMat;
+        }
 
-        // void Revive(Enemy e)
-        // {
-        //     e.alive = true; e.hp = e.max; e.ripe = e.emerged = e.bumped = false; e.y = e.yPrev = e.y0;
-        //     if (e.type == "zakuro" && zakuroPrefab == null && e.body != null) { e.body.sharedMaterial = ModelFactory.ZakuroMat; if (e.arils != null) e.arils.SetActive(false); }
-        // }
+        void Revive(Enemy e)
+        {
+            e.alive = true; e.hp = e.max; e.ripe = e.emerged = e.bumped = false; e.y = e.yPrev = e.y0;
+            if (e.type == "zakuro" && zakuroPrefab == null && e.body != null) { e.body.sharedMaterial = ModelFactory.ZakuroMat; if (e.arils != null) e.arils.SetActive(false); }
+        }
 
         void ClearChasers()
         {
