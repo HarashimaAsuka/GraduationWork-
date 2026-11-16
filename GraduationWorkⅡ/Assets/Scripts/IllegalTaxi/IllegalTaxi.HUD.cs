@@ -49,36 +49,100 @@ namespace ShoryoumaTaxi
             return new Vector2(sp.x / gs, (Screen.height - sp.y) / gs);
         }
 
+        
         void OnGUI()
         {
+            bool canvasMode = CanvasHUDActive;
+
+            // Canvas UIの更新
+            if (canvasMode)
+                RefreshCanvasHUD();
+
             if (cam == null) return;
+
             InitStyles();
             gs = Screen.height / 720f;
-            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(gs, gs, 1));
-            float W = Screen.width / gs, H = 720f;
+            GUI.matrix = Matrix4x4.TRS(
+                Vector3.zero,
+                Quaternion.identity,
+                new Vector3(gs, gs, 1)
+            );
+
+            float W = Screen.width / gs;
+            float H = 720f;
+
             bool play = mode == Mode.Play || mode == Mode.Pause;
 
-            // 画面のふち：被弾の赤、パトランプ（大警部が近いほど強く）
-            if (play && hurtT > 0) Fill(new Rect(0, 0, W, H), new Color(0.88f, 0.21f, 0.29f, hurtT / 0.5f * 0.3f));
+            // 画面のふち：被弾の赤、パトランプ
+            if (play && hurtT > 0)
+                Fill(new Rect(0, 0, W, H),
+                    new Color(0.88f, 0.21f, 0.29f, hurtT / 0.5f * 0.3f));
+
             bool chase = play && phase == "back" && bossM.root.activeSelf;
+
             if (play && (sirenT > 0 || lunging > 0 || chase))
             {
                 bool on = Mathf.FloorToInt(t * 4) % 2 == 0;
-                float k = sirenT > 0 || lunging > 0 ? 0.55f : !st.boss ? 0.15f + 0.4f * Mathf.Clamp01(1 - (bossY - y) / 30f) : 0.15f;
-                var c = on ? new Color(1, 0.16f, 0.2f, k) : new Color(0.16f, 0.47f, 1, k);
-                for (int i = 0; i < 6; i++) Fill(new Rect(on ? 0 : W - 120 + i * 20, 0, 20 + (on ? i * 20 : 0), H), new Color(c.r, c.g, c.b, c.a * (1 - i / 6f)));
+                float k = sirenT > 0 || lunging > 0
+                    ? 0.55f
+                    : !st.boss
+                        ? 0.15f + 0.4f * Mathf.Clamp01(1 - (bossY - y) / 30f)
+                        : 0.15f;
+
+                var c = on
+                    ? new Color(1, 0.16f, 0.2f, k)
+                    : new Color(0.16f, 0.47f, 1, k);
+
+                for (int i = 0; i < 6; i++)
+                    Fill(
+                        new Rect(on ? 0 : W - 120 + i * 20, 0,
+                            20 + (on ? i * 20 : 0), H),
+                        new Color(c.r, c.g, c.b, c.a * (1 - i / 6f))
+                    );
             }
-            if (play) { DrawPops(); DrawIncoming(W, H); DrawHUD(W, H); }
-            if (bannerT > 0 && play)
+
+            if (play)
+            {
+                DrawPops();
+                DrawIncoming(W, H);
+
+                if (!canvasMode)
+                    DrawHUD(W, H);
+            }
+
+            // バナー
+            if (bannerT > 0 && play && !canvasMode)
             {
                 float a = Mathf.Clamp01(bannerT * 3);
-                Label(new Rect(0, H * 0.3f, W, 90), bannerMain, sHuge, new Color(bannerCol.r, bannerCol.g, bannerCol.b, a));
-                if (bannerSub != "") Label(new Rect(0, H * 0.3f + 86, W, 40), bannerSub, sCenter, new Color(1, 1, 1, a));
+
+                Label(
+                    new Rect(0, H * 0.3f, W, 90),
+                    bannerMain,
+                    sHuge,
+                    new Color(bannerCol.r, bannerCol.g, bannerCol.b, a)
+                );
+
+                if (bannerSub != "")
+                    Label(
+                        new Rect(0, H * 0.3f + 86, W, 40),
+                        bannerSub,
+                        sCenter,
+                        new Color(1, 1, 1, a)
+                    );
             }
-            if (mode == Mode.Title) DrawTitle(W, H);
-            else if (mode == Mode.Pause) DrawPause(W, H);
-            else if (mode == Mode.Result) DrawResult(W, H);
+
+            // Canvas UI使用時は旧画面を描画しない
+            if (!canvasMode)
+            {
+                if (mode == Mode.Title)
+                    DrawTitle(W, H);
+                else if (mode == Mode.Pause)
+                    DrawPause(W, H);
+                else if (mode == Mode.Result)
+                    DrawResult(W, H);
+            }
         }
+
 
         void DrawHUD(float W, float H)
         {

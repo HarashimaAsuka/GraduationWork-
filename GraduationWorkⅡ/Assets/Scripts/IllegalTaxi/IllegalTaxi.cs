@@ -350,6 +350,10 @@ namespace ShoryoumaTaxi
             if (GameInput.PausePressed()) { if (mode == Mode.Play) Pause(); else if (mode == Mode.Pause) Resume(); }
             if (mode == Mode.Play) Step(frameDt);
             else if (mode == Mode.Title) Idle(frameDt);
+            if (CanvasHUDActive)
+            {
+                RefreshCanvasHUD();
+            }
             bgm.Tick(Time.unscaledDeltaTime);
         }
 
