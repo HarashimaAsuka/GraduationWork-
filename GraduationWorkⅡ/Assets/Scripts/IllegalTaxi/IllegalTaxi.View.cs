@@ -5,10 +5,10 @@ namespace ShoryoumaTaxi
     /// <summary>毎フレームの見た目（Web版 v42 の render に当たる）。</summary>
     public partial class IllegalTaxi
     {
-        float boltT = 3, flashT;
+        float boltT = 3, flashT; GameObject bossGlow;
 
         // カメラのすぐ前では縮んで消え、遠くではふっと消える（急に消えないように）
-        float FadeFor(float yy) => Smooth((yy - camPos.y - 1.5f) / 4.5f) * Mathf.Clamp01(1 - (yy - y - 70) / 30f);
+        float FadeFor(float yy) => Smooth((yy - camPos.y - 2.5f) / 4f) * Mathf.Clamp01(1 - (yy - y - 70) / 30f);
         Quaternion FaceCam(Vector3 p) => Quaternion.LookRotation(camPos - p, cam.transform.up);
         static void SetVis(GameObject g, bool on) { if (g.activeSelf != on) g.SetActive(on); }
 
@@ -22,9 +22,9 @@ namespace ShoryoumaTaxi
             // ---- 空・霧・環境光（ステージ2＝夕暮れ、ステージ3＝雨と稲光、ステージ4＝赤い月の夜） ----
             System.Func<System.Func<World.Zone, Color>, Color> Z = pick => st != null && st.boss ? World.ZoneColorOf(World.ZonesM, f, pick) : World.ZoneColor(f, pick);
             Color bg = Z(z => z.bg), fog = Z(z => z.fog), sky = Z(z => z.sky), ground = Z(z => z.ground);
-            if (stage == 2) { var tint = ModelFactory.Hex(0x3a1a12); bg = Color.Lerp(bg, tint, 0.3f); fog = Color.Lerp(fog, ModelFactory.Hex(0x5a2a1a), 0.3f); sky = Color.Lerp(sky, ModelFactory.Hex(0xffb070), 0.3f); }
+            if (st.look == 2) { var tint = ModelFactory.Hex(0x3a1a12); bg = Color.Lerp(bg, tint, 0.3f); fog = Color.Lerp(fog, ModelFactory.Hex(0x5a2a1a), 0.3f); sky = Color.Lerp(sky, ModelFactory.Hex(0xffb070), 0.3f); }
             float flash = 1 + world.Flash * 3.2f;
-            if (stage == 3)
+            if (st.look == 3)
             {
                 bg = Color.Lerp(bg, ModelFactory.Hex(0x081428), 0.65f); fog = Color.Lerp(fog, ModelFactory.Hex(0x14223e), 0.65f);
                 sky = Color.Lerp(sky, ModelFactory.Hex(0x7a9ad0), 0.6f); ground = Color.Lerp(ground, ModelFactory.Hex(0x0a1838), 0.6f);
@@ -41,12 +41,15 @@ namespace ShoryoumaTaxi
             cam.fieldOfView = FOV_UP + speedK * 8 + (wind > 0 ? 18 * Mathf.Min(1, wind) : 0);
             RenderSettings.fogStartDistance = camGap + 16; RenderSettings.fogEndDistance = Mathf.Lerp(110, 170, Mathf.Clamp01((f - 0.55f) * 3));
             float follow = 1 - Mathf.Exp(-7 * frameDt);
-            camFX += (px * CAMF - camFX) * follow; camFZ += (pz * CAMF - camFZ) * follow;
+            // スターフォックス式：カメラは自機の真後ろにほぼ付いていく（照準＝画面の真ん中がぶれない）
+            float camK = 1 - Mathf.Exp(-12 * frameDt);
+            camFX += (px * 0.8f - camFX) * camK; camFZ += (pz * 0.85f - camFZ) * camK;
+            float camUp = Mathf.Lerp(2.6f, 4.5f, bks);   // 自機を画面の少し下に置いて、照準と重ならないように
             float near = back && bossM.root.activeSelf && !st.boss ? Mathf.Clamp01(1 - (bossY - y) / 30f) : 0;
-            float sh = (shake > 0 ? shake * 0.5f : 0) + near * 0.12f;
+            float sh = frozen ? 0 : ShakeNow() + near * 0.12f, shX = shakeKind == 's' && shake > 0 ? (frozen ? 0 : near * 0.12f) : sh;   // 小さい揺れは縦だけ
             float cy0 = y - camGap, baseX = Road.Cx(y), baseZ = Road.Cz(y);
             float flX = Mathf.Sin(t * 0.55f) * 0.35f, flZ = Mathf.Sin(t * 0.8f + 1) * 0.25f, flY = Mathf.Sin(t * 0.45f + 2) * 0.4f;
-            camPos = new Vector3(baseX + camFX + flX + R(-sh, sh), cy0 + flY, baseZ + camFZ + CAM_UP + flZ + R(-sh, sh));
+            camPos = new Vector3(baseX + camFX + flX + R(-shX, shX), cy0 + flY, baseZ + camFZ + camUp + flZ * 0.5f + R(-sh, sh));
             const float ahead = 30;
             float tx = Road.Cx(y + ahead) - baseX, tz = Road.Cz(y + ahead) - baseZ;
             lookX += (tx * 0.55f - lookX) * follow; lookZ += (tz * 0.45f - lookZ) * follow;
@@ -55,7 +58,7 @@ namespace ShoryoumaTaxi
             camRoll += (Mathf.Clamp(-curv * 2.4f, -0.28f, 0.28f) - camRoll) * follow;
             cam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(camLook - camPos, new Vector3(Mathf.Sin(camRoll), 0, Mathf.Cos(camRoll))));
             keyLight.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(new Vector3(3, 44, -6), Vector3.forward));
-            world.Tick(t, dt, y, camPos, cam.transform.rotation, f, st.boss ? 3 : 1, playing, c => se.Play(c, 0.6f), worldSfx);
+            world.Tick(t, dt, y, camPos, cam.transform.rotation, f, st.look >= 4 ? 3 : 1, playing, c => se.Play(c, 0.6f), worldSfx);
 
             // ---- 精霊馬：行きはきゅうりの馬、帰りはナスの牛（こちらを向く） ----
             bool go = dir > 0, moving = Mathf.Abs(vel) > 3;
@@ -70,7 +73,7 @@ namespace ShoryoumaTaxi
             if (go && moving) tr.Rotate(Mathf.Sin(stepT) * 3.4f, 0, 0, Space.Self);
             if (!go && stun > 0) tr.Rotate(-14f, 0, 0, Space.Self);   // 体当たりでのけぞる
             tr.Rotate(0, 0, -camRoll * 0.6f * Mathf.Rad2Deg, Space.Self);
-            float morph = phase == "alarm" ? Mathf.Sin(Mathf.Clamp01((alarmT - 1.6f) / 0.8f) * Mathf.PI) : 0;
+            float morph = phase == "alarm" ? Mathf.Sin(Mathf.Clamp01((alarmT - 1.2f) / 0.7f) * Mathf.PI) : 0;
             tr.localScale = Vector3.one * Mathf.Lerp(1f, 1.35f, bks) * (1 - 0.35f * morph);
             steed.cucumber.transform.localScale = Vector3.one * Mathf.Max(0.001f, 1 - bks);
             steed.nasu.transform.localScale = Vector3.one * Mathf.Max(0.001f, bks);
@@ -114,7 +117,7 @@ namespace ShoryoumaTaxi
                 var p = Road.WP(x, yy + Mathf.Sin(t * 1.5f + c.ph) * 0.25f, z);
                 c.go.transform.SetPositionAndRotation(p, FaceCam(p));
                 if (c.mode == "enter") c.go.transform.Rotate(0, 0, (1 - c.enterT / c.enterDur) * 140f * Mathf.Sign(c.ex), Space.Self);
-                c.go.transform.localScale = Vector3.one * a * (1 + c.flash * 1.5f);
+                c.go.transform.localScale = Vector3.one * (0.55f + 0.45f * a) * (1 + c.flash * 1.5f);
                 Siren(c.siren, 6);
             }
             foreach (var fl in flying)
@@ -154,24 +157,20 @@ namespace ShoryoumaTaxi
                     if (bossM.root.activeSelf && phase == "back" && InLine(bossY, bossX, bossZ, 3.6f)) locked = true;
                     if (B != null) { foreach (var h in B.hands) if (!h.dead && InLine(h.y, h.x, h.z, 1.8f)) locked = true; foreach (var g in B.guards) if (!g.dead && InLine(g.y, g.x, g.z, 1.4f)) locked = true; }
                 }
-                AimLine(out var w0, out var ddx, out var ddz);
-                float[] dists = { 12, 28 };
-                for (int i = 0; i < 2; i++)
-                {
-                    SetVis(reticles[i], aiming); if (!aiming) continue;
-                    reticles[i].transform.SetPositionAndRotation(w0 + new Vector3(ddx * dists[i], dists[i], ddz * dists[i]), Quaternion.LookRotation(cam.transform.forward, cam.transform.up));
-                    Tint(reticles[i], locked ? ModelFactory.Hex(0xff4060) : new Color(1, 1, 1, i == 0 ? 0.7f : 0.45f));
-                }
+                UpdateJuiceView(frozen ? 0 : frameDt, aiming, locked);   // 照準は1つだけ（IllegalTaxi.Juice.cs）
             }
 
             // ---- 大警部 ----
             if (bossM.root.activeSelf)
             {
-                float by = phase == "alarm" ? Mathf.Lerp(bossY + 40, bossY, Mathf.Clamp01((alarmT - 1.5f) / 1.2f)) : bossY;
+                float by = phase == "alarm" ? Mathf.Lerp(bossY + 40, bossY, Mathf.Clamp01((alarmT - 1.1f) / 1.0f)) : bossY;
                 float nr = Mathf.Clamp01((by - y) / 40f);
                 var p = Road.WP(bossX, by, bossZ);   // 当たり判定と同じ場所に出す
                 bossM.root.transform.SetPositionAndRotation(p, FaceCam(p));
                 bossM.root.transform.localScale = Vector3.one * (st.boss ? 4.2f : Mathf.Lerp(4.2f, 7f, nr)) * (1 + bossFlash * 0.6f);
+                // 塩が当たった瞬間、白く光る（当たったのが分かるように）
+                if (bossGlow == null) bossGlow = ModelFactory.GlowQ(bossM.root.transform, 0xffffff, 3.4f, 0.85f, new Vector3(0, 0, 0.8f));
+                SetVis(bossGlow, bossFlash > 0 && bossFlash < 0.09f);
                 bossM.face.localEulerAngles = new Vector3(0, 0, B != null && B.mode == "dizzy" ? Mathf.Sin(t * 10) * 14f : Mathf.Sin(t * 3) * 3.4f);
                 bossM.mouth.localScale = new Vector3(0.84f, (0.18f + (bossFlash > 0 ? 0.12f : 0)) * 2, 0.2f);
                 SetVis(bossM.core, B != null && B.stunT > 0);
@@ -189,7 +188,7 @@ namespace ShoryoumaTaxi
                         var p = Road.WP(h.x, h.y, h.z);
                         h.go.transform.SetPositionAndRotation(p, FaceCam(p));
                         h.go.transform.Rotate(0, 0, h.mode == "slam" ? 180f : h.mode == "sweep" || h.mode == "aimS" ? h.sd * 90f : h.sd * 17f, Space.Self);
-                        h.go.transform.localScale = Vector3.one * 1.3f * (1 + h.hit * 2);
+                        h.go.transform.localScale = new Vector3(h.sd > 0 ? -1 : 1, 1, 1) * 1.3f * (1 + h.hit * 2);   // 右の手袋は左右反転（両方右手にならないように）
                         if (h.ring && ri < 2) { var r = slamRings[ri++]; SetVis(r, true); r.transform.position = Road.WP(h.tx, y, h.tz); }
                         if (h.band) { SetVis(sweepBand, true); sweepBand.transform.position = Road.WP(0, y, h.tz); }
                     }
@@ -210,7 +209,7 @@ namespace ShoryoumaTaxi
                 for (; ri < 2; ri++) SetVis(slamRings[ri], false);
             }
             // ---- 逃げている感じ：赤と青の回転灯 ----
-            bool chase = back && bossM.root.activeSelf && playing;
+            bool chase = back && bossM.root.activeSelf && (playing || mode == Mode.Title);   // タイトルの逃走デモでも回転灯
             if (chase)
             {
                 bool on = Mathf.FloorToInt(t * 4) % 2 == 0; float I = 2.2f + near * 3;

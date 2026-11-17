@@ -11,6 +11,7 @@ namespace ShoryoumaTaxi
     ///   白手袋：叩きつけ（赤い輪）／薙ぎ払い（赤い帯）。手袋を祓うと大警部がひるむ。
     ///   突進：「！」と赤い輪のあと突っ込んでくる。よけると目を回す。ひるんでいるあいだは塩1発が2発ぶん。
     ///   三の段：パト提灯の護衛が塩をはじく。先に護衛を祓う。
+    ///   v43：ふだんは白手袋で顔を守っている（顔に塩が効かない）。攻撃してくる瞬間・目を回しているあいだがスキ。
     /// </summary>
     public partial class IllegalTaxi
     {
@@ -35,7 +36,7 @@ namespace ShoryoumaTaxi
 
         void BuildBossFightParts()
         {
-            for (int i = 0; i < 2; i++) { gloves[i] = ModelFactory.Glove(); gloves[i].transform.SetParent(fx, false); gloves[i].SetActive(false); }
+            for (int i = 0; i < 2; i++) { gloves[i] = MakeGlove(); gloves[i].transform.SetParent(fx, false); gloves[i].SetActive(false); }
             var red = new Color(1, 0.19f, 0.25f, 0.6f);
             for (int i = 0; i < 2; i++) { slamRings[i] = ModelFactory.MeshObj("slamRing", MeshKit.Ring(2.0f, 2.4f, 40), fx, ModelFactory.OverlayMat(red, 3050), Vector3.zero, Vector3.one, new Vector3(90, 0, 0)); slamRings[i].SetActive(false); }
             sweepBand = ModelFactory.Prim(PrimitiveType.Quad, fx, Vector3.zero, new Vector3(16, 3.6f, 1), ModelFactory.OverlayMat(new Color(1, 0.19f, 0.25f, 0.4f), 3049), new Vector3(90, 0, 0)); sweepBand.SetActive(false);
@@ -60,7 +61,7 @@ namespace ShoryoumaTaxi
         // ============================================================
         void BossChase(float dt)
         {
-            float v = st.bossV;
+            float v = st.bossV * T.bossSpeedMul;
             if (st.lunge)
             {
                 lungeT -= dt;
@@ -81,12 +82,17 @@ namespace ShoryoumaTaxi
                     se.Play(se.cuffShot); bossFlash = 0.2f;
                 }
             }
-            if (bossY - y < 2.5f) { over = true; endReason = "caught"; se.Play(se.whistle); se.Play(se.cuffs); Banner("御用だ！", "", ModelFactory.Hex(0xff6a5a), 2); Later(1.4f, () => Finish("caught")); return; }
+            if (bossY - y < 2.5f) { over = true; endReason = "caught"; Juice(0.25f, 'l'); hurtFlash = 0.35f; HitMarkAt(px, y + 1, pz, 3, 0xff8a7a); se.Play(se.whistle); se.Play(se.cuffs); Banner("御用だ！", "", ModelFactory.Hex(0xff6a5a), 2); Later(0.9f, () => Finish("caught")); return; }
             if (y <= START)
             {
                 over = true; bool ok = fare >= st.goal; endReason = ok ? "clear" : "red";
                 Banner(ok ? "逃げきった！" : "逃げきった……けど", "", ModelFactory.Hex(ok ? 0xffd060 : 0xff8a7a), 1.6f);
-                Later(1.5f, () => Finish(ok ? "clear" : "red"));
+                if (ok)
+                {   // 褒める：歓声と色とりどりの花火
+                    se.Play(se.cheer); int[] cols = { 0xffd060, 0xff8a7a, 0x9be38a, 0xc69bff, 0x6cc4e8 };
+                    for (int i = 0; i < 5; i++) { int ci = i; Later(i * 0.22f, () => Burst(R(-4, 4), y + R(4, 12), R(0, 4), cols[ci], 60, 9)); }
+                }
+                Later(1.2f, () => Finish(ok ? "clear" : "red"));
             }
         }
 
@@ -116,7 +122,7 @@ namespace ShoryoumaTaxi
             B.guards.Clear();
             for (int i = 0; i < 4; i++)
             {
-                var pm = ModelFactory.Patochin(); pm.root.transform.SetParent(fx, false);
+                var pm = MakePolice("patochin"); pm.root.transform.SetParent(fx, false);
                 B.guards.Add(new Guard { go = pm.root, siren = pm.siren, a = i / 4f * Mathf.PI * 2 });
             }
             B.guardT = 0;
@@ -140,7 +146,16 @@ namespace ShoryoumaTaxi
             }
         }
         void StunBoss(float sec) { B.stunT = Mathf.Max(B.stunT, sec); B.spiral = 0; if (B.mode == "windup") B.mode = "idle"; se.Play(se.bell, 0.6f); }
-        void BossDamage(int n) { bossHp = Mathf.Max(0, bossHp - n); B.hit = 0.12f; bossFlash = 0.08f; B.dmg += n; B.weakHit |= n > 1; }
+        void BossDamage(int n) { bossHp = Mathf.Max(0, bossHp - n); B.hit = 0.12f; bossFlash = 0.1f; B.dmg += n; B.weakHit |= n > 1; trailWait = 0.5f; }
+        // 顔ががら空きか：攻撃の最中・目を回している・両手を祓ったとき。ふだんは手で顔を守る
+        bool BossOpen()
+        {
+            if (B == null) return true;
+            if (B.stunT > 0 || B.spiral > 0 || B.mode != "idle") return true;
+            bool anyGuard = false;
+            foreach (var h in B.hands) { if (h.dead) continue; if (h.mode == "idle" || h.mode == "back") anyGuard = true; else return true; }   // 手で殴りに来た瞬間もスキ
+            return !anyGuard;
+        }
 
         void SaltBossFight(SaltW s)
         {
@@ -155,8 +170,8 @@ namespace ShoryoumaTaxi
             foreach (var h in B.hands)
             {
                 if (h.dead || !SaltHits(s, h.y, h.x, h.z, 1.8f)) continue;
-                s.dead = true; h.hp--; h.hit = 0.12f; se.Play(se.hit, 0.8f); Burst(h.x, h.y, h.z, 0xffffff, 6, 3);
-                if (h.hp <= 0) { h.dead = true; h.go.SetActive(false); Burst(h.x, h.y, h.z, 0xffffff, 40, 7); se.Play(se.kill); StunBoss(3); PopAt(h.x, h.y, h.z, "白手袋を祓った！", Color.white, 28); }
+                s.dead = true; h.hp--; h.hit = 0.12f; se.Play(se.hit, 0.8f); Burst(h.x, h.y, h.z, 0xffffff, 6, 3); 
+                if (h.hp <= 0) { h.dead = true; h.go.SetActive(false); Burst(h.x, h.y, h.z, 0xffffff, 40, 7); se.Play(se.kill); StunBoss(3); Juice(0.15f, 'l'); HitMarkAt(h.x, h.y, h.z, 2.6f); PopAt(h.x, h.y, h.z, "白手袋を祓った！", Color.white, 28); }
                 return;
             }
             float by = y + B.relY;
@@ -164,7 +179,14 @@ namespace ShoryoumaTaxi
             {
                 s.dead = true;
                 if (B.shield && B.stunT <= 0) { Burst(B.x, by - 3, B.z, 0x80c8ff, 6, 2.5f); return; }
+                if (!BossOpen())
+                {
+                    Burst(B.x, by - 3, B.z, 0x80c8ff, 4, 2f); HitMarkAt(B.x, by - 2.5f, B.z, 0.6f, 0x80c8ff); se.Play(se.hit, 0.35f);
+                    if (guardPopT <= 0) { guardPopT = 1.2f; PopAt(B.x, by, B.z + 2, "ガード！", ModelFactory.Hex(0x9fd8ff), 24); }
+                    Teach("guard", "手で顔を守っているあいだは効かない。<b>攻撃してくる瞬間</b>がスキ！", "", 3.4f, 0); return;
+                }
                 se.Play(se.bossHit); Burst(B.x, by - 2, B.z, B.stunT > 0 ? 0xffd040 : 0xffffff, 8, 3);
+                HitMarkAt(B.x + R(-1, 1), by - 1.5f, B.z + R(-0.5f, 1), B.stunT > 0 ? 1.4f : 0.8f, B.stunT > 0 ? 0xffd040 : 0xffffff); if (B.stunT > 0) Juice(0.03f, 's');
                 BossDamage(B.stunT > 0 ? 2 : 1);
             }
         }
@@ -175,7 +197,11 @@ namespace ShoryoumaTaxi
             {
                 h.hit = Mathf.Max(0, h.hit - dt); h.ring = h.band = false;
                 if (h.dead) continue;
-                float homeX = B.x + h.sd * (RX * 0.6f + 6), homeZ = B.z - 1 + Mathf.Sin(B.t * 1.4f + h.sd) * 0.8f, homeY = B.relY - 6;
+                // 守り：顔の前で手を構える（攻撃中・目を回しているあいだは外へ開く）
+                bool guard = B.intro >= 3 && BossOpen() == false;
+                float homeX = guard ? B.x + h.sd * 1.5f : B.x + h.sd * (RX * 0.6f + 6);
+                float homeZ = guard ? B.z + 0.4f : B.z - 1 + Mathf.Sin(B.t * 1.4f + h.sd) * 0.8f;
+                float homeY = guard ? B.relY - 3.5f : B.relY - 6;
                 float ease = 1 - Mathf.Exp(-5 * dt);
                 void Home() { h.x += (homeX - h.x) * ease; h.z += (homeZ - h.z) * ease; h.relY += (homeY - h.relY) * ease; }
                 if (h.mode == "idle" || B.intro < 3) Home();
@@ -199,7 +225,7 @@ namespace ShoryoumaTaxi
                     h.ring = h.t < 0.32f;
                     if (prev > 0 && h.relY <= 0)
                     {
-                        shake = 0.5f; Burst(h.x, y, h.z, 0xff6a3a, 20, 5); se.Play(se.ram);
+                        Juice(0, 'm'); Burst(h.x, y, h.z, 0xff6a3a, 20, 5); se.Play(se.ram);
                         if (inv <= 0 && Hyp(h.x - px, h.z - pz) < 2.4f && !UseCharm()) { Hurt(12); stun = 0.6f; }
                     }
                     if (h.t > 0.9f) { h.mode = "back"; h.t = 0; }
@@ -230,8 +256,10 @@ namespace ShoryoumaTaxi
             }
         }
 
+        float guardPopT;
         void BossFightUpdate(float dt)
         {
+            guardPopT = Mathf.Max(0, guardPopT - dt);
             B.t += dt; B.hit = Mathf.Max(0, B.hit - dt);
             if (B.intro < 3)
             {
@@ -245,7 +273,7 @@ namespace ShoryoumaTaxi
                 if (ph != B.phase)
                 {
                     B.phase = ph; B.mode = "idle"; B.spiral = 0; B.cd = 1.8f; B.relY = 24; B.stunT = 0;
-                    water = Mathf.Min(100, water + 30); shake = 0.7f; se.Play(se.bell); se.Play(se.roar);
+                    water = Mathf.Min(100, water + 30); Juice(0.2f, 'l'); hurtFlash = 0.25f; se.Play(se.bell); se.Play(se.roar);
                     foreach (var h in B.hands) { h.dead = false; h.hp = HAND_HP; h.mode = "idle"; }
                     if (ph == 2) Banner("二の段", "大警部が本気を出した！（水分 +30）", ModelFactory.Hex(0xff8a7a), 2.6f);
                     else { Banner("三の段", "護衛のパト提灯が塩をはじく。先に護衛を祓え（水分 +30）", ModelFactory.Hex(0xff8a7a), 2.6f); SpawnGuards(); }
@@ -254,7 +282,7 @@ namespace ShoryoumaTaxi
                 B.stunT = Mathf.Max(0, B.stunT - dt);
                 if (B.mode != "rush" && B.mode != "dizzy")
                 {
-                    float w = ph == 1 ? 0.45f : 0.7f, e = 1 - Mathf.Exp(-3 * dt);
+                    float w = ph == 1 ? 0.6f : 0.8f, e = 1 - Mathf.Exp(-3 * dt);
                     B.x += (Mathf.Sin(B.t * 0.6f * sp) * RX * w - B.x) * e;
                     B.z += (3.2f + Mathf.Sin(B.t * 0.9f * sp) * RZ * 0.2f - B.z) * e;
                 }
@@ -281,7 +309,7 @@ namespace ShoryoumaTaxi
                     B.relY = Mathf.Lerp(24, 34, Smooth(B.modeT / 0.8f));
                     if (B.modeT < 1.1f) { B.rx = px; B.rz = pz; B.lockMode = 1; } else B.lockMode = 2;
                     int nb = Mathf.FloorToInt(B.modeT / 0.37f); if (nb > B.beeps) { B.beeps = nb; Beep(B.modeT > 1.1f); }
-                    if (B.modeT > 1.5f) { B.mode = "rush"; B.modeT = 0; B.sx = B.x; B.sz = B.z; shake = 0.3f; se.Play(se.roar); }
+                    if (B.modeT > 1.5f) { B.mode = "rush"; B.modeT = 0; B.sx = B.x; B.sz = B.z; Juice(0, 's'); se.Play(se.roar); }
                 }
                 else if (B.mode == "rush")
                 {
@@ -300,7 +328,7 @@ namespace ShoryoumaTaxi
                 else if (B.mode == "return") { B.modeT += dt; B.relY = Mathf.Lerp(14, 24, Smooth(B.modeT)); if (B.modeT > 1) { B.mode = "idle"; B.cd = 1.2f; } }
                 else
                 {
-                    B.relY = 24 + Mathf.Sin(B.t * 0.8f) * 2;
+                    B.relY = 24 + Mathf.Sin(B.t * 0.5f) * 5;   // 寄ったり離れたり
                     if (B.spiral <= 0 && B.stunT <= 0) { B.cd -= dt * sp; if (B.cd <= 0) BossAttack(); }
                 }
             }
@@ -308,7 +336,7 @@ namespace ShoryoumaTaxi
             B.dmgT -= dt;
             if (B.dmg > 0 && B.dmgT <= 0)
             {
-                B.dmgT = 0.9f;
+                B.dmgT = 0.25f;
                 PopAt(B.x + R(-1, 1), y + B.relY + 2, B.z + 2.5f, B.weakHit ? $"−{B.dmg}　弱点！" : $"−{B.dmg}", B.weakHit ? ModelFactory.Hex(0xffd040) : Color.white, B.weakHit ? 32 : 26);
                 B.dmg = 0; B.weakHit = false;
             }
@@ -317,7 +345,7 @@ namespace ShoryoumaTaxi
             roarT -= dt; if (roarT <= 0) { roarT = R(7, 10); se.Play(se.roar); }
             if (bossHp <= 0)
             {
-                over = true; endReason = "bossWin"; se.Play(se.kill); se.Play(se.roar);
+                over = true; endReason = "bossWin"; se.Play(se.kill); se.Play(se.roar); Juice(0.3f, 'l'); hurtFlash = 0.5f; HitMarkAt(B.x, y + B.relY, B.z, 4); Later(0.4f, () => se.Play(se.cheer));
                 foreach (var h in B.hands) h.go.SetActive(false);
                 foreach (var g in B.guards) g.go.SetActive(false);
                 for (int i = 0; i < 6; i++) { int k = i; Later(i * 0.15f, () => Burst(bossX + R(-3, 3), bossY + R(-3, 3), bossZ + R(-2, 2), k % 2 == 1 ? 0xffffff : 0xff5040, 40, 10)); }
@@ -325,7 +353,7 @@ namespace ShoryoumaTaxi
                 Banner("大警部を祓った！", "", ModelFactory.Hex(0xffd060), 2.4f); bgm.Stop(); Later(2.2f, () => Finish("bossWin"));
                 return;
             }
-            if (y <= START) { over = true; endReason = "gate"; Banner("門が開かない！", "", ModelFactory.Hex(0xff8a7a), 1.6f); Later(1.5f, () => Finish("gate")); }
+            if (y <= START) { over = true; endReason = "gate"; Banner("門が開かない！", "", ModelFactory.Hex(0xff8a7a), 1.6f); Later(1.1f, () => Finish("gate")); }
         }
     }
 }

@@ -54,6 +54,19 @@ namespace ShoryoumaTaxi
         [SerializeField] Button retryButton;
         [SerializeField] Button resultToTitleButton;
 
+        // ---- v43 で増えたもの（どれも空でよい。入れたものだけ使われる） ----
+        [Header("v43：制限時間・星・社名（空でもよい）")]
+        [SerializeField] Text timerText;              // 夜明けまで 2:30
+        [SerializeField] Text titleCompanyText;       // ○○タクシー 地獄営業所
+        [SerializeField] Text[] stageStarTexts = new Text[4];   // タイトルの各ステージの ★★☆ ベスト
+        [SerializeField] Text resultStarsText;        // リザルトの ★★☆ ベスト更新！
+        [SerializeField] Image bossHpTrailFill;       // 決戦：減った分が白く残るバー（bossHpFill の後ろに置く）
+        [SerializeField] Image flashImage;            // 画面全体の白い閃光（全画面の白い Image、Raycast Target はオフ）
+        [SerializeField] GameObject namePanel;        // 社名を決める画面（空なら IMGUI で出す）
+        [SerializeField] InputField nameInput;
+        [SerializeField] Button nameOkButton, nameCancelButton;
+        [SerializeField] Button titleRenameButton, pauseRenameButton, pauseRetryButton, charmRetryButton;
+
         bool CanvasHUDActive => useCanvasHUD && titlePanel != null;
 
         bool canvasButtonsBound;
@@ -71,7 +84,7 @@ namespace ShoryoumaTaxi
                     if (stageButtons[i] == null) continue;
 
                     stageButtons[i].onClick.AddListener(
-                        () => StartStage(stageNo)
+                        () => BeginStage(stageNo)
                     );
                 }
             }
@@ -79,8 +92,14 @@ namespace ShoryoumaTaxi
             Bind(resumeButton, Resume);
             Bind(pauseToTitleButton, ToTitle);
             Bind(nextStageButton, () => StartStage(st.no + 1));
-            Bind(retryButton, () => StartStage(st.no));
+            Bind(retryButton, Retry);
             Bind(resultToTitleButton, ToTitle);
+            Bind(pauseRetryButton, Retry);
+            Bind(charmRetryButton, RetryWithCharm);
+            Bind(titleRenameButton, OpenName);
+            Bind(pauseRenameButton, OpenName);
+            Bind(nameOkButton, () => { if (nameInput != null) nameDraft = nameInput.text; CloseName(true); });
+            Bind(nameCancelButton, () => CloseName(false));
         }
 
         static void Bind(Button button, UnityEngine.Events.UnityAction action)
@@ -100,6 +119,20 @@ namespace ShoryoumaTaxi
             SetPanel(gamePanel, isPlay || isPause);
             SetPanel(pausePanel, isPause);
             SetPanel(resultPanel, isResult);
+            bool isName = mode == Mode.Name;
+            if (namePanel != null)
+            {
+                if (isName && !namePanel.activeSelf && nameInput != null) nameInput.text = nameDraft;
+                SetPanel(namePanel, isName);
+            }
+            if (flashImage != null) { var fc = flashImage.color; fc.a = (isPlay || isPause) ? Mathf.Clamp01(hurtFlash * 2.5f) * 0.35f : 0; flashImage.color = fc; }
+            SetText(titleCompanyText, $"{TaxiSession.CoName}タクシー 地獄営業所");
+            if (stageStarTexts != null)
+                for (int i = 0; i < stageStarTexts.Length && i < 4; i++)
+                {
+                    int s = TaxiSession.Stars(i + 1);
+                    SetText(stageStarTexts[i], s > 0 ? $"{new string('★', s)}{new string('☆', 3 - s)}　ベスト {TaxiSession.Best(i + 1)}" : "まだ遊んでいない");
+                }
 
             bool tutorialOn = isPlay && tipCur != null && st != null && st.tutorial;
             SetPanel(tutorialPanel, tutorialOn);
@@ -114,6 +147,7 @@ namespace ShoryoumaTaxi
 
             // ステージ名
             SetText(stageNameText, $"STAGE {st.no}　{st.name}");
+            SetText(timerText, st.time > 0 && !st.boss ? $"夜明けまで {FmtTime(timeLeft)}" : "");
 
             // 売上
             SetText(fareText, $"売上　{fare} / {st.goal}文");
@@ -188,6 +222,7 @@ namespace ShoryoumaTaxi
                     bossHpFill,
                     bossHpMax > 0 ? (float)bossHp / bossHpMax : 0
                 );
+                SetFill(bossHpTrailFill, bossHpMax > 0 ? hpTrail / bossHpMax : 0);
             }
 
             // 研修の説明
@@ -224,6 +259,9 @@ namespace ShoryoumaTaxi
 
                 if (nextStageButton != null)
                     nextStageButton.gameObject.SetActive(resultOk && st.no < 4);
+                if (charmRetryButton != null)
+                    charmRetryButton.gameObject.SetActive(offerCharmRetry);
+                SetText(resultStarsText, resultOk ? $"{new string('★', resultStars)}{new string('☆', 3 - resultStars)}" + (resultNewBest ? "　ベスト更新！" : "") : "");
             }
         }
 

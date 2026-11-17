@@ -423,11 +423,11 @@ namespace ShoryoumaTaxi
                     {
                         var lr = new GameObject("rope").AddComponent<LineRenderer>(); lr.transform.SetParent(g, false);
                         lr.useWorldSpace = false; lr.positionCount = 21; lr.widthMultiplier = 0.16f; lr.sharedMaterial = ropeMat;
-                        for (int q = 0; q <= 20; q++) { float u = q / 20f * 2 - 1; lr.SetPosition(q, new Vector3(u * W, 0, 10 - row * 4 - (1 - u * u) * 3)); }
+                        for (int q = 0; q <= 20; q++) { float u = q / 20f * 2 - 1; lr.SetPosition(q, new Vector3(u * W, 0, 11.5f - row * 2.5f - (1 - u * u) * 1.5f)); }   // Web版と同じ：綱を上に寄せ、たるみを小さく（道の上にかぶらない）
                         for (int q = 1; q < 9; q++)
                         {
                             float u = q / 9f * 2 - 1;
-                            var lp = new Vector3(u * W, 0, 10 - row * 4 - (1 - u * u) * 3 - 1.0f);
+                            var lp = new Vector3(u * W, 0, 11.5f - row * 2.5f - (1 - u * u) * 1.5f - 1.0f);
                             ModelFactory.Prim(PrimitiveType.Cylinder, g, lp, new Vector3(1.4f, 0.65f, 1.4f), lampMat, new Vector3(90, 0, 0));
                             ModelFactory.GlowFlat(g, 0xffa040, 3.2f, 0.6f, lp);
                         }

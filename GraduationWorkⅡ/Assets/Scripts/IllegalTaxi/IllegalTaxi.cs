@@ -5,7 +5,7 @@ using Random = UnityEngine.Random;
 namespace ShoryoumaTaxi
 {
     /// <summary>
-    /// 「精霊馬タクシー 地獄営業所」v42「違法タクシー」版（Web版 v42 に合わせたもの）。
+    /// 「精霊馬タクシー 地獄営業所」v43「違法タクシー」版（Web版 v43 に合わせたもの）。
     /// 新しいシーンを作り、空のオブジェクトにこれを1つだけ付ければ遊べる（TaxiGame と同じシーンに置かないこと）。
     ///
     /// ルール：
@@ -22,9 +22,22 @@ namespace ShoryoumaTaxi
     ///   IllegalTaxi.HUD.cs  … 画面表示（IMGUI）
     ///   ModelFactory.Police.cs … 警察・大警部などの仮モデル
     ///   TaxiAudio.cs        … BGM（Resources/BGM/sneak・chase・boss）と効果音
+    ///   IllegalTaxi.CanvasHUD … inspector上で編集できるようにしてるｓ
     /// </summary>
     public partial class IllegalTaxi : MonoBehaviour
     {
+        [Header("シーンの役割（タイトルとゲームを別のシーンに分けるとき）")]
+        [Tooltip("All＝1つのシーンでタイトルもゲームも／Title＝タイトルだけ（ステージを選ぶとゲームのシーンへ）／Game＝ゲームだけ（タイトルへ戻るとタイトルのシーンへ）")]
+        public SceneRole sceneRole = SceneRole.All;
+        [Tooltip("ゲームのシーンの名前（Build Settings に入れておく）")] public string gameSceneName = "IllegalTaxi_Game";
+        [Tooltip("タイトルのシーンの名前（Build Settings に入れておく）")] public string titleSceneName = "IllegalTaxi_Title";
+        public enum SceneRole { All, Title, Game }
+
+        [Header("編集しやすい外部データ（空なら、コードの中の値と仮モデル）")]
+        [Tooltip("調整用の数値（Create > 精霊馬タクシー > 調整用の数値）")] public TaxiTuning tuning;
+        [Tooltip("ステージ1〜4のデータ（メニュー：精霊馬タクシー > ステージデータを作る）")] public TaxiStageData[] stageAssets = new TaxiStageData[0];
+        [Tooltip("警察・大警部・弾などのモデル（Create > 精霊馬タクシー > モデルの差し替え）")] public TaxiModelSet models;
+
         [Header("差し替え用プレハブ（空なら仮モデル）")]
         public GameObject cucumberPrefab;
         public GameObject nasuPrefab;
@@ -46,13 +59,13 @@ namespace ShoryoumaTaxi
         static readonly string[] RARE_NAME = { "罪人", "大悪党", "大罪人" };
         static readonly Color[] RARE_COL = { new Color(0.9f, 0.96f, 1f), new Color(1f, 0.82f, 0.38f), new Color(0.78f, 0.61f, 1f) };
 
-        enum Mode { Title, Play, Pause, Result }
+        enum Mode { Title, Play, Pause, Result, Name }
         Mode mode = Mode.Title;
 
         // ---- ステージ ----
         class StageDef
         {
-            public int no, goal, bossHp; public string name; public bool tutorial, boss, lunge;
+            public int no, goal, bossHp, look = 1; public string name; public bool tutorial, boss, lunge; public float time;
             public float vOut = V_OUT, vHome = V_HOME, bossV, bossGap, waveOut, waveBack, bossAtk, firstWave = 4; public int bossVolley = 1;
             public List<(float y, int rare)> souls = new List<(float, int)>();
             public List<(float y, string type, float x, float z, bool fixedPos)> cops = new List<(float, string, float, float, bool)>();
@@ -62,7 +75,7 @@ namespace ShoryoumaTaxi
         StageDef st; int stage = 1;
 
         // ---- 状態 ----
-        class Cop { public GameObject go; public GameObject[] siren; public string type, mode = "static", after = "static"; public float y, x, z, r, cd, ph, flash, prevRel, lead, holdT, enterT, enterDur, ex, ey, ez; public int hp; public bool dead; }
+        class Cop { public GameObject go; public GameObject[] siren; public string type, mode = "static", after = "static"; public float y, x, z, r, cd, ph, flash, prevRel, lead, holdT, enterT, enterDur, ex, ey, ez; public int hp; public bool dead, near; public GameObject glow; }
         class SoulW { public GameObject go; public float y, x, z, ph; public int rare; public bool gone; }
         class ItemW { public ModelFactory.ItemModel im; public ModelFactory.Plate tag; public string kind; public float y, x, z; public bool taken; }
         class CoinW { public GameObject go; public float y, x, z; public bool taken; }
@@ -75,6 +88,7 @@ namespace ShoryoumaTaxi
         class LaterJob { public float t; public System.Action fn; }
         class Tip { public string html, step; public float dur = 4, min = 2.6f, wait = 0.7f, t, expire; public bool warn, slow = true; public System.Func<bool> until; }
 
+        float hitstop, shakeAmp = 0.5f, shakeDur = 0.3f, hurtFlash, timeLeft, hpTrail, trailWait; char shakeKind = 'm'; int nearN; readonly Dictionary<int, int> failN = new Dictionary<int, int>();
         float t, y, yPrev, vel, bk, px, pz = 0.4f, water, cool, inv, hurtT, shake, stepT, stun, stunK = 0.35f, wind, sirenT, phaseT, alarmT, slowT, ts = 1, moved;
         int dir = 1, fare, lost, delivered, kills, rams; bool charm, over; string phase = "out", endReason = "";
         float bossY, bossX, bossZ, bossV, bossAtkT = 3, roarT = 4, lungeT = 7, lunging, bossFlash, waveT; int waveN;
@@ -104,7 +118,6 @@ namespace ShoryoumaTaxi
         Transform conductorRoot, conductorModel; ModelFactory.ConductorModel conductorFallback;
         GameObject gateHell, gateWorld; ModelFactory.Plate labelHell, labelWorld;
         Light horseLight, keyLight, strobeR, strobeB; GameObject aura;
-        GameObject[] reticles = new GameObject[2];
         Mesh airMesh; Vector3[] airV; Color[] airC; MeshKit.QuadCloud partCloud;
         Font jpFont; Transform fx;
         float RX = 5, RZ = 3.3f; int lastW, lastH;
@@ -155,15 +168,10 @@ namespace ShoryoumaTaxi
             foreach (var (g, yy) in new[] { (gateHell, START), (gateWorld, END) }) { g.transform.position = Road.WP(0, yy, 0); g.transform.localScale = Vector3.one * 1.25f; }
             labelHell = ModelFactory.MakeLabel(jpFont, 7f, 1.75f, "行き先", ModelFactory.Hex(0xffd9a0), Color.white, ModelFactory.Hex(0xff7a5a), 0.42f, 0.75f); labelHell.main.text = "地獄の門";
             labelWorld = ModelFactory.MakeLabel(jpFont, 7f, 1.75f, "行き先", ModelFactory.Hex(0xffd9a0), Color.white, ModelFactory.Hex(0xff7a5a), 0.42f, 0.75f); labelWorld.main.text = "現世の門";
-            bossM = ModelFactory.DaiKeibu(); bossM.root.SetActive(false);
+            bossM = MakeBossModel(); bossM.root.SetActive(false);
             BuildBossFightParts();
             var vc = Mats.VertexColor();
-            for (int i = 0; i < 2; i++)
-            {
-                var g = new GameObject("reticle"); g.transform.SetParent(fx, false);
-                g.AddComponent<MeshFilter>().sharedMesh = MeshKit.CircleLines(i == 0 ? 0.46f : 0.64f, 32, Color.white);
-                g.AddComponent<MeshRenderer>().sharedMaterial = vc; reticles[i] = g;
-            }
+            BuildJuice();   // ねらいの印・ヒットマーク（IllegalTaxi.Juice.cs）
             airV = new Vector3[AIR_N * 2]; airC = new Color[AIR_N * 2];
             airMesh = new Mesh(); airMesh.MarkDynamic(); airMesh.vertices = airV; airMesh.colors = airC;
             var ai = new int[AIR_N * 2]; for (int i = 0; i < ai.Length; i++) ai[i] = i;
@@ -173,8 +181,10 @@ namespace ShoryoumaTaxi
             var pm = Mats.VertexColor(); pm.mainTexture = ModelFactory.GlowTex;
             var pgo = new GameObject("sparks"); pgo.AddComponent<MeshFilter>().sharedMesh = partCloud.mesh; pgo.AddComponent<MeshRenderer>().sharedMaterial = pm;
 
-            STAGES = MakeStages();
+            STAGES = LoadStages();
             NewGame(1); FitField();
+            // シーンを分けたとき：ゲームのシーンは、タイトルで選んだステージからすぐ始める
+            if (sceneRole == SceneRole.Game) StartStage(Mathf.Max(1, TaxiSession.StageToStart), TaxiSession.StartWithCharm);
         }
 
         Light MakeLight(string name, LightType type, Color c, float intensity, float range)
@@ -215,23 +225,58 @@ namespace ShoryoumaTaxi
         // ============================================================
         //  ステージの配置
         // ============================================================
-        StageDef[] MakeStages()
+        // ステージデータ（ScriptableObject）が入っていればそれを使う。なければコードの中の値
+        StageDef[] LoadStages()
         {
-            var s1 = new StageDef { no = 1, name = "研修", goal = 20, tutorial = true, vOut = 13, vHome = 12, bossV = 9.5f, bossGap = 55, waveBack = 7, firstWave = 6 };
+            var def = MakeStages();
+            if (stageAssets == null) return def;
+            for (int i = 0; i < stageAssets.Length && i < def.Length; i++)
+            {
+                var a = stageAssets[i]; if (a == null) continue;
+                var s = new StageDef { no = i + 1, name = a.stageName, goal = a.goal, time = a.time, tutorial = a.tutorial, boss = a.bossFight, look = a.look,
+                    vOut = a.outSpeed, vHome = a.homeSpeed, bossV = a.bossSpeed, bossGap = a.bossGap, lunge = a.bossLunge, bossAtk = a.bossAttack, bossVolley = a.bossVolley,
+                    bossHp = a.bossHp, waveOut = a.waveOut, waveBack = a.waveBack, firstWave = a.firstWave };
+                foreach (var q in a.souls) s.souls.Add((q.y, q.rare));
+                foreach (var q in a.cops) s.cops.Add((q.y, q.type == TaxiStageData.CopType.巡査 ? "junsa" : "patochin", q.x, q.z, q.fixedPos));
+                foreach (var q in a.items) s.items.Add((q.y, q.kind == TaxiStageData.ItemKind.お供えの水 ? "water" : q.kind == TaxiStageData.ItemKind.追い風 ? "wind" : "charm"));
+                def[i] = s;
+            }
+            return def;
+        }
+        /// <summary>エディターのメニュー「ステージデータを作る」用：コードの中の4ステージを ScriptableObject にして返す</summary>
+        public static TaxiStageData[] BuiltInStageAssets()
+        {
+            var list = new List<TaxiStageData>();
+            foreach (var s in MakeStages())
+            {
+                var a = ScriptableObject.CreateInstance<TaxiStageData>();
+                a.no = s.no; a.stageName = s.name; a.goal = s.goal; a.time = s.time; a.tutorial = s.tutorial; a.bossFight = s.boss; a.look = s.look;
+                a.outSpeed = s.vOut; a.homeSpeed = s.vHome; a.bossSpeed = s.bossV; a.bossGap = s.bossGap; a.bossLunge = s.lunge; a.bossAttack = s.bossAtk; a.bossVolley = s.bossVolley;
+                a.bossHp = s.bossHp; a.waveOut = s.waveOut; a.waveBack = s.waveBack; a.firstWave = s.firstWave;
+                foreach (var q in s.souls) a.souls.Add(new TaxiStageData.SoulPos { y = q.y, rare = q.rare });
+                foreach (var q in s.cops) a.cops.Add(new TaxiStageData.CopPos { y = q.y, type = q.type == "junsa" ? TaxiStageData.CopType.巡査 : TaxiStageData.CopType.パト提灯, fixedPos = q.fixedPos, x = q.x, z = q.z });
+                foreach (var q in s.items) a.items.Add(new TaxiStageData.ItemPos { y = q.y, kind = q.kind == "water" ? TaxiStageData.ItemKind.お供えの水 : q.kind == "wind" ? TaxiStageData.ItemKind.追い風 : TaxiStageData.ItemKind.お守り });
+                list.Add(a);
+            }
+            return list.ToArray();
+        }
+        static StageDef[] MakeStages()
+        {
+            var s1 = new StageDef { no = 1, name = "研修", goal = 20, time = 200, tutorial = true, vOut = 13, vHome = 12, bossV = 9.5f, bossGap = 55, waveBack = 7, firstWave = 6 };
             foreach (var (yy, r) in new[] { (80f, 0), (105f, 0), (135f, 0), (170f, 1), (205f, 0), (250f, 0), (290f, 0) }) s1.souls.Add((yy, r));
             s1.cops.Add((420, "junsa", -2.2f, 0, true)); s1.cops.Add((470, "patochin", 0, 0, false)); s1.cops.Add((540, "junsa", 2, 0, true));
             s1.cops.Add((600, "junsa", 1.5f, 0, true)); s1.cops.Add((630, "patochin", 0, 0, false));
             s1.items.Add((330, "water")); s1.items.Add((360, "wind")); s1.items.Add((390, "charm"));
 
             var s2 = Gen(2, 13, 26, new[] { (150f, "water"), (230f, "charm"), (300f, "wind"), (380f, "water"), (470f, "charm"), (560f, "wind"), (610f, "water") }, 0.55f, 0.3f);
-            s2.name = "一日目"; s2.goal = 60; s2.bossV = 12.6f; s2.bossGap = 68; s2.waveOut = 6.5f; s2.waveBack = 4f; s2.bossAtk = 5.5f; s2.bossVolley = 1; s2.firstWave = 3;
+            s2.name = "一日目"; s2.goal = 60; s2.time = 150; s2.look = 2; s2.bossV = 12.6f; s2.bossGap = 68; s2.waveOut = 6.5f; s2.waveBack = 4f; s2.bossAtk = 5.5f; s2.bossVolley = 1; s2.firstWave = 3;
             var s3 = Gen(3, 15, 36, new[] { (130f, "water"), (210f, "charm"), (260f, "wind"), (340f, "water"), (420f, "charm"), (480f, "wind"), (550f, "water"), (620f, "wind") }, 0.4f, 0.35f);
-            s3.name = "二日目"; s3.goal = 90; s3.bossV = 13f; s3.bossGap = 80; s3.lunge = true; s3.waveOut = 4.2f; s3.waveBack = 2.5f; s3.bossAtk = 3.6f; s3.bossVolley = 3; s3.firstWave = 2;
-            var s4 = new StageDef { no = 4, name = "大警部との決戦", boss = true, bossHp = 300, vHome = 7 };
+            s3.name = "二日目"; s3.goal = 90; s3.time = 140; s3.look = 3; s3.bossV = 13f; s3.bossGap = 80; s3.lunge = true; s3.waveOut = 4.2f; s3.waveBack = 2.5f; s3.bossAtk = 3.6f; s3.bossVolley = 3; s3.firstWave = 2;
+            var s4 = new StageDef { no = 4, name = "大警部との決戦", boss = true, bossHp = 200, vHome = 7, look = 4 };
             foreach (var (yy, k) in new[] { (590f, "water"), (520f, "charm"), (440f, "water"), (370f, "water"), (300f, "charm"), (230f, "water"), (160f, "water"), (100f, "water") }) s4.items.Add((yy, k));
             return new[] { s1, s2, s3, s4 };
         }
-        StageDef Gen(int no, int nSouls, int nCops, (float, string)[] its, float w0, float w1)
+        static StageDef Gen(int no, int nSouls, int nCops, (float, string)[] its, float w0, float w1)
         {
             var s = new StageDef { no = no };
             var rng = new System.Random(no * 977 + 13);
@@ -267,9 +312,11 @@ namespace ShoryoumaTaxi
 
         Cop MakeCop(float yy, string type, float x, float z)
         {
-            var pm = type == "junsa" ? ModelFactory.Junsa() : ModelFactory.Patochin();
+            var pm = MakePolice(type);
             pm.root.transform.SetParent(fx, false);
-            return new Cop { go = pm.root, siren = pm.siren, type = type, y = yy, x = x, z = z, hp = type == "junsa" ? 2 : 3, r = type == "junsa" ? 1f : 1.1f,
+            // 塩が当たった瞬間に白く光らせる板（ふだんは隠す）
+            var glow = ModelFactory.GlowQ(pm.root.transform, 0xffffff, 3.4f, 0.9f, new Vector3(0, 0, 0.9f)); glow.SetActive(false);
+            return new Cop { glow = glow, go = pm.root, siren = pm.siren, type = type, y = yy, x = x, z = z, hp = type == "junsa" ? 2 : 3, r = type == "junsa" ? 1f : 1.1f,
                 cd = R(1.2f, 2.8f), ph = R(0, 6), prevRel = yy - y };
         }
 
@@ -278,13 +325,14 @@ namespace ShoryoumaTaxi
             ClearGame();
             stage = Mathf.Clamp(no, 1, 4); st = STAGES[stage - 1];
             Road.Flip = false;
-            world.SetStage(st.boss ? 3 : 1);   // 決戦は赤い月の夜
+            world.SetStage(st.look >= 4 ? 3 : 1);   // 決戦は赤い月の夜。夕暮れ・雨は IllegalTaxi.View.cs で色を足す
             var rng = new System.Random(no * 31 + 7);
             float RXp() => ((float)rng.NextDouble() * 2 - 1) * 3.2f;
             float RZp() => ((float)rng.NextDouble() * 2 - 1) * 2.4f;
             bool bs = st.boss;
             t = 0; y = yPrev = bs ? END - 4 : START + 6; vel = 0; dir = bs ? -1 : 1; phase = bs ? "back" : "out"; phaseT = 0; bk = bs ? 1 : 0; px = 0; pz = 0.4f;
             water = 100; fare = lost = delivered = kills = rams = 0; cool = inv = hurtT = shake = stun = wind = sirenT = alarmT = slowT = moved = 0; ts = 1; charm = false; over = false; endReason = "";
+            timeLeft = st.time * T.timeMul; hitstop = hurtFlash = 0; nearN = 0; hpTrail = st.bossHp; trailWait = 0;
             bossHp = st.bossHp; bossHpMax = Mathf.Max(1, st.bossHp); bossAtkT = 3; roarT = 4; lungeT = 7; lunging = 0; bossFlash = 0; waveT = st.firstWave; waveN = 0;
             tut = st.tutorial ? 0 : -1; tutShown = tutEntered = false;
             foreach (var (yy, rare) in st.souls)
@@ -293,9 +341,11 @@ namespace ShoryoumaTaxi
                 souls.Add(new SoulW { go = g, y = yy, x = RXp(), z = RZp(), rare = rare, ph = (float)rng.NextDouble() * 6 });
             }
             foreach (var c in st.cops) cops.Add(MakeCop(c.y, c.type, c.fixedPos ? c.x : RXp(), c.fixedPos ? c.z : RZp()));
+            // リスクとリターンを近くに：紫の魂（30文）のすぐ先には巡査が見張っている（研修以外）
+            if (!st.tutorial) foreach (var s in souls) if (s.rare == 2) cops.Add(MakeCop(s.y + 7, "junsa", Mathf.Clamp(s.x + (s.x > 0 ? -1.6f : 1.6f), -3, 3), s.z));
             foreach (var (yy, kind) in st.items)
             {
-                var im = ModelFactory.Item(kind); im.root.transform.SetParent(fx, false);
+                var im = MakeItem(kind); im.root.transform.SetParent(fx, false);
                 var tag = ModelFactory.MakeLabel(jpFont, 4.2f, 1.45f, ItemName(kind), ItemCol(kind), Color.white, ItemCol(kind), 0.5f, 0.42f);
                 tag.main.text = ItemEffect(kind);
                 items.Add(new ItemW { im = im, tag = tag, kind = kind, y = yy, x = RXp(), z = RZp() });
@@ -307,17 +357,50 @@ namespace ShoryoumaTaxi
         }
 
         static string ItemName(string k) => k == "water" ? "お供えの水" : k == "wind" ? "追い風" : "厄除けのお守り";
-        static string ItemEffect(string k) => k == "water" ? "水分 +30" : k == "wind" ? "4秒間、速くなる" : "次の1回、ぶつかっても平気";
+        static string ItemEffect(string k) => k == "water" ? "水分 +30" : k == "wind" ? "しばらく、ぐんと速くなる" : "次の1回、ぶつかっても平気";
         static Color ItemCol(string k) => ModelFactory.Hex(k == "water" ? 0x6cc4e8 : k == "wind" ? 0x9be38a : 0xff8a8a);
 
-        void StartStage(int no)
+        // タイトルからステージを選んだとき：社名がまだなら先に決めてもらう。タイトル専用のシーンなら、ゲームのシーンへ移る
+        int pendingStage = 1;
+        public void BeginStage(int no)
         {
-            NewGame(no); mode = Mode.Play; cool = 0.4f;
-            bgm.Play(st.boss ? "boss" : "sneak");
-            if (st.boss) { Banner("大警部を祓え", "ステージ4　地獄の門に着くまでに倒す", ModelFactory.Hex(0xff8a7a), 3.2f); sirenT = 2; se.Play(se.siren, 0.7f); Later(1.2f, () => se.Play(se.roar)); }
-            else Banner($"目標 {st.goal}文", $"ステージ{st.no}　{st.name}", ModelFactory.Hex(0xffd060), 3.2f);
+            if (string.IsNullOrEmpty(TaxiSession.CompanyName)) { pendingStage = no; OpenName(); return; }
+            StartStage(no);
         }
-        void ToTitle() { bgm.Stop(); NewGame(1); mode = Mode.Title; }
+        void StartStage(int no, bool withCharm = false)
+        {
+            if (sceneRole == SceneRole.Title)
+            {
+                TaxiSession.StageToStart = no; TaxiSession.StartWithCharm = withCharm;
+                UnityEngine.SceneManagement.SceneManager.LoadScene(gameSceneName); return;
+            }
+            NewGame(no); mode = Mode.Play; cool = 0.4f; if (withCharm) charm = true;
+            TaxiSession.StartWithCharm = false;
+            bgm.Play(st.boss ? "boss" : "sneak");
+            if (st.boss) { Banner("大警部を祓え", "手で顔を守っているあいだは効かない。攻撃してくる瞬間がスキ", ModelFactory.Hex(0xff8a7a), 3.6f); sirenT = 2; se.Play(se.siren, 0.7f); Later(1.2f, () => se.Play(se.roar)); }
+            else Banner($"目標 {st.goal}文", $"{TaxiSession.CoName}タクシー地獄営業所　ステージ{st.no}　{st.name}" + (st.time > 0 ? $"　制限時間 {FmtTime(timeLeft)}" : ""), ModelFactory.Hex(0xffd060), 3.2f);
+        }
+        void ToTitle()
+        {
+            bgm.Stop();
+            if (sceneRole == SceneRole.Game) { TaxiSession.StageToStart = 0; UnityEngine.SceneManagement.SceneManager.LoadScene(titleSceneName); return; }
+            NewGame(1); mode = Mode.Title;
+        }
+        void Retry() => StartStage(st.no);
+        void RetryWithCharm() => StartStage(st.no, true);
+        static string FmtTime(float s) { int n = Mathf.Max(0, Mathf.CeilToInt(s)); return $"{n / 60}:{n % 60:00}"; }
+
+        // ---- 社名（「○○タクシー」の○○）。はじめて営業するときに決める ----
+        public string nameDraft = "";
+        Mode nameBack = Mode.Title;
+        public void OpenName() { nameBack = mode == Mode.Name ? Mode.Title : mode; nameDraft = TaxiSession.CompanyName; mode = Mode.Name; }
+        public void CloseName(bool ok)
+        {
+            if (ok) TaxiSession.CompanyName = string.IsNullOrWhiteSpace(nameDraft) ? "精霊馬" : nameDraft.Trim().Substring(0, Mathf.Min(8, nameDraft.Trim().Length));
+            mode = nameBack;
+            if (!ok) pendingStage = 0;
+            if (ok && nameBack == Mode.Title && pendingStage > 0) { int n = pendingStage; pendingStage = 0; StartStage(n); }
+        }
         void Pause() { mode = Mode.Pause; bgm.Pause(true); }
         void Resume() { mode = Mode.Play; cool = Mathf.Max(cool, 0.35f); bgm.Pause(false); }
 
@@ -334,10 +417,24 @@ namespace ShoryoumaTaxi
                 case "caught": resultTitle = "御用だ！"; resultText = "大警部に追いつかれ、精霊馬タクシーは差し押さえられた。"; break;
                 case "dry": resultTitle = "干からびた"; resultText = "塩を撒きすぎて、精霊馬が干からびてしまった。"; break;
                 case "gate": resultTitle = "門が開かない！"; resultText = "大警部を祓えないまま、地獄の門に着いてしまった。"; break;
+                case "dawn": resultTitle = "夜が明けた"; resultText = "お盆の夜が明けて、地獄の門が閉まってしまった。魂を乗せすぎると遅くなるぞ。"; break;
                 default: resultTitle = "大警部を祓った！"; resultText = "お盆の夜の取り締まりは終わった。精霊馬タクシーは、今日も無許可で営業中。"; break;
             }
-            se.Play(resultOk ? se.win : se.bell);
+            // ご褒美：星で評価してベストを残す。負けが2回続いたら、お守り付きの再挑戦を出す
+            resultStars = 0; resultNewBest = false;
+            if (resultOk)
+            {
+                resultStars = st.boss ? (water > 60 ? 3 : water > 30 ? 2 : 1) : (fare >= st.goal * 1.6f ? 3 : fare >= st.goal * 1.3f ? 2 : 1);
+                int score = st.boss ? Mathf.RoundToInt(water) : fare;
+                resultNewBest = score > TaxiSession.Best(st.no);
+                TaxiSession.SaveRecord(st.no, resultStars, score);
+                failN[st.no] = 0;
+            }
+            else failN[st.no] = (failN.TryGetValue(st.no, out var f0) ? f0 : 0) + 1;
+            offerCharmRetry = !resultOk && failN[st.no] >= 2; resultAt = Time.unscaledTime;
+            se.Play(resultOk ? se.win : se.bell); if (resultOk) se.Play(se.cheer);
         }
+        int resultStars; bool resultNewBest, offerCharmRetry; float resultAt;
 
         // ============================================================
         //  毎フレーム
@@ -347,7 +444,10 @@ namespace ShoryoumaTaxi
             frameDt = Mathf.Min(Time.deltaTime, 0.033f);
             if (Screen.width != lastW || Screen.height != lastH) FitField();
             if (GameInput.MutePressed()) bgm.Toggle();
-            if (GameInput.PausePressed()) { if (mode == Mode.Play) Pause(); else if (mode == Mode.Pause) Resume(); }
+            if (mode != Mode.Name && GameInput.PausePressed()) { if (mode == Mode.Play) Pause(); else if (mode == Mode.Pause) Resume(); }
+            // リトライは迅速に：結果画面・一時停止中に R ですぐやり直す。結果画面の Enter は「次へ」か「もう一度」
+            if ((mode == Mode.Result || mode == Mode.Pause) && KeyDown("r")) Retry();
+            else if (mode == Mode.Result && KeyDown("enter")) { if (resultOk && st.no < 4) StartStage(st.no + 1); else Retry(); }
             if (mode == Mode.Play) Step(frameDt);
             else if (mode == Mode.Title) Idle(frameDt);
             if (CanvasHUDActive)
@@ -357,15 +457,24 @@ namespace ShoryoumaTaxi
             bgm.Tick(Time.unscaledDeltaTime);
         }
 
+        // タイトル：一番盛り上がる「大警部からの逃走」を自動で見せる（展示で足を止めてもらう）
         void Idle(float dt)
         {
-            t += dt; yPrev = y; vel = 8; y += 8 * dt; if (y > END - 20) y = START + 20;
-            px = Mathf.Sin(t * 0.4f) * 1.5f; pz = 0.5f + Mathf.Sin(t * 0.6f) * 0.6f;
+            t += dt; yPrev = y; phase = "back"; dir = -1; bk = 1; vel = -12; y -= 12 * dt;
+            if (y < START + 40) { y = END - 40; air.Clear(); }
+            px = Mathf.Sin(t * 0.7f) * 2.2f; pz = 0.4f + Mathf.Sin(t * 0.9f) * 1.0f;
+            bossY = y + 17 + Mathf.Sin(t * 0.6f) * 4; bossX = px * 0.6f; bossZ = pz * 0.5f; if (!bossM.root.activeSelf) bossM.root.SetActive(true);
+            cool -= dt;
+            if (cool <= 0 && Mathf.Sin(t * 0.8f) > -0.2f) { cool = 0.16f; FireSalt(false); }
+            foreach (var s in salts) { s.y += s.vy * dt; s.life += dt; if (s.life > 0.5f) { s.dead = true; Destroy(s.go); } }
+            salts.RemoveAll(s => s.dead);
             UpdateAir(dt); UpdateParts(dt);
         }
 
         void Step(float rdt)
         {
+            hurtFlash = Mathf.Max(0, hurtFlash - rdt);
+            if (hitstop > 0) { hitstop -= rdt; return; }   // ヒットストップ：止めている間はゲームを進めない（見た目と揺れは動き続ける）
             slowT = Mathf.Max(0, slowT - rdt);
             ts += ((slowT > 0 ? 0.55f : 1f) - ts) * (1 - Mathf.Exp(-8 * rdt));
             float dt = rdt * ts;
@@ -386,15 +495,15 @@ namespace ShoryoumaTaxi
             if (phase == "alarm")
             {
                 alarmT += dt; vel *= Mathf.Exp(-6 * dt);
-                bk = Mathf.Clamp01((alarmT - 1.6f) / 0.8f);
-                if (alarmT > 1.7f && flags.Add("puffed")) { se.Play(se.puff); Burst(px, y, pz, 0xffffff, 70, 4); }
-                if (alarmT > 2.8f) StartEscape();
+                bk = Mathf.Clamp01((alarmT - 1.2f) / 0.7f);
+                if (alarmT > 1.3f && flags.Add("puffed")) { se.Play(se.puff); Burst(px, y, pz, 0xffffff, 70, 4); }
+                if (alarmT > 2.2f) StartEscape();
             }
             else
             {
                 bool outP = phase == "out";
-                float load = outP ? Mathf.Max(0.45f, 1 - 0.06f * riders.Count) : 1, boost = wind > 0 ? 2.6f : 1, stn = stun > 0 ? stunK : 1;
-                float target = (outP ? st.vOut : -st.vHome) * load * boost * stn;
+                float load = outP ? Mathf.Max(0.45f, 1 - T.slowPerRider * riders.Count) : 1, boost = wind > 0 ? T.windMul : 1, stn = stun > 0 ? stunK : 1;
+                float target = (outP ? st.vOut * T.outSpeedMul : -st.vHome * T.homeSpeedMul) * load * boost * stn;
                 vel += Mathf.Clamp(target - vel, -40 * dt, 40 * dt);
             }
             yPrev = y; y = Mathf.Clamp(y + vel * dt, START - 2, END + 2);
@@ -409,21 +518,14 @@ namespace ShoryoumaTaxi
             float dd = Mathf.Sqrt((px / RX) * (px / RX) + (pz / RZ) * (pz / RZ)); if (dd > 1) { px /= dd; pz /= dd; }
 
             // 塩：道の向きにまっすぐ飛ぶ
-            if (GameInput.Fire() && cool <= 0 && phase != "alarm")
-            {
-                AimLine(out var w0, out var ddx, out var ddz);
-                var g = ModelFactory.Prim(PrimitiveType.Cube, fx, Vector3.zero, Vector3.one * 0.28f, ModelFactory.SaltMat);
-                ModelFactory.GlowQ(g.transform, 0xbfe8ff, 3f, 0.8f, Vector3.zero);
-                salts.Add(new SaltW { go = g, y0 = y + 0.8f, y = y + 0.8f, w0 = w0 + new Vector3(ddx * 0.8f, 0, ddz * 0.8f), dx = ddx, dz = ddz, vy = 48 + Mathf.Max(0, vel) });
-                water = Mathf.Max(0, water - (st.boss ? 0.12f : 0.25f)); cool = 0.14f; se.Play(se.salt, 0.7f);
-            }
+            if (GameInput.Fire() && cool <= 0 && phase != "alarm") FireSalt(true);
             foreach (var s in salts)
             {
                 s.y += s.vy * dt; s.life += dt;
                 foreach (var c in cops)
                 {
                     if (c.dead || c.mode == "enter" || !SaltHits(s, c.y, c.x, c.z, c.r)) continue;
-                    s.dead = true; c.hp--; c.flash = 0.12f; se.Play(se.hit, 0.8f); Burst(c.x, c.y - 0.5f, c.z, 0xffffff, 6, 3);
+                    s.dead = true; c.hp--; c.flash = 0.12f; se.Play(se.hit, 0.8f); Burst(c.x, c.y - 0.5f, c.z, 0xffffff, 6, 3); if (c.hp > 0) HitMarkAt(c.x, c.y - 0.4f, c.z, 0.7f);
                     if (c.hp <= 0) KillCop(c, true);
                     break;
                 }
@@ -433,7 +535,7 @@ namespace ShoryoumaTaxi
                     s.dead = true; bossFlash = 0.08f; Burst(bossX, bossY - 2, bossZ, 0xffffff, 6, 4); se.Play(se.bossHit);
                     bossY = Mathf.Min(bossY + 0.45f, y + st.bossGap + 10);
                 }
-                if (s.life > 1.6f) s.dead = true;
+                if (s.life > 2.4f) s.dead = true;
                 if (s.dead) Destroy(s.go);
             }
             salts.RemoveAll(s => s.dead);
@@ -449,7 +551,7 @@ namespace ShoryoumaTaxi
 
             // 警察
             Waves(dt);
-            float atkK = st.no == 1 ? 1.5f : st.no == 2 ? 1f : 0.75f;
+            float atkK = (st.no == 1 ? 1.5f : st.no == 2 ? 1f : 0.75f) / Mathf.Max(0.1f, T.enemyAttackMul);
             foreach (var c in cops)
             {
                 if (c.dead) continue;
@@ -478,7 +580,10 @@ namespace ShoryoumaTaxi
                 }
                 bool crossed = c.prevRel * rel <= 0 || Mathf.Abs(rel) < 0.5f;
                 c.prevRel = rel;
-                if (crossed && inv <= 0 && Hyp(c.x - px, c.z - pz) < c.r + 0.6f) { if (phase == "out") Caught(c); else if (phase == "back") Ram(c); }
+                float hd = Hyp(c.x - px, c.z - pz);
+                // 車掌のスリ：ここは違法タクシー。警察のすぐ横をすれ違うと、車掌が懐の小銭をスる。近づきすぎるとぶつかる
+                if (crossed && phase != "alarm" && !c.near && hd >= c.r + 0.6f && hd < c.r + T.suriRange) Suri(c);
+                if (crossed && inv <= 0 && hd < c.r + 0.6f) { if (phase == "out") Caught(c); else if (phase == "back") Ram(c); }
                 if (c.y < cam.transform.position.y - 6 && c.mode != "static") { c.dead = true; Destroy(c.go); }
             }
             cops.RemoveAll(c => c.dead);
@@ -512,13 +617,30 @@ namespace ShoryoumaTaxi
                 { cn.taken = true; Destroy(cn.go); fare += 5; se.Play(se.coins); Burst(cn.x, cn.y, cn.z, 0xffd060, 18, 5); PopAt(cn.x, cn.y, cn.z, "小銭 +5文", ModelFactory.Hex(0xffd060), 26); }
             }
 
+            // 制限時間：お盆の夜が明けるまで（決戦はなし）
+            if (st.time > 0 && !st.boss && phase != "alarm")
+            {
+                timeLeft -= dt;
+                if (timeLeft <= 20) Teach("time", "<b>夜明けが近い</b>！ 時間切れになると地獄の門が閉まる", "", 3f, 0);
+                if (timeLeft <= 0) { timeLeft = 0; over = true; endReason = "dawn"; Juice(0.2f, 'm'); hurtFlash = 0.3f; se.Play(se.bell); Banner("夜が明けた……", "", ModelFactory.Hex(0xffb070), 2); Later(1.0f, () => Finish("dawn")); return; }
+            }
             if (phase == "out" && y >= END) Arrive();
             if (phase == "back") { if (st.boss) BossFightUpdate(dt); else BossChase(dt); }
             if (over) return;
-            if (water <= 0) { over = true; endReason = "dry"; Banner("干からびた……", "", ModelFactory.Hex(0xff8a7a), 2); Later(1.4f, () => Finish("dry")); return; }
+            if (water <= 0) { over = true; endReason = "dry"; Banner("干からびた……", "", ModelFactory.Hex(0xff8a7a), 2); Later(0.9f, () => Finish("dry")); return; }
             UpdateAir(dt);
         }
 
+        void FireSalt(bool real)
+        {
+            AimLine(out var w0, out var ddx, out var ddz);
+            var g = ModelFactory.Prim(PrimitiveType.Cube, fx, Vector3.zero, Vector3.one * 0.28f, ModelFactory.SaltMat);
+            ModelFactory.GlowQ(g.transform, 0xbfe8ff, 3f, 0.8f, Vector3.zero);
+            salts.Add(new SaltW { go = g, y0 = y + 0.8f, y = y + 0.8f, w0 = w0 + new Vector3(ddx * 0.8f, 0, ddz * 0.8f), dx = ddx, dz = ddz, vy = 48 + Mathf.Max(0, vel) });
+            cool = 0.14f;
+            if (!real) return;   // タイトルの見本は水分も音も使わない
+            water = Mathf.Max(0, water - (st.boss ? T.saltWater * 0.5f : T.saltWater)); se.Play(se.salt, 0.7f);
+        }
         static Vector2 MoveWASD()
         {
             // 矢印キーは使わない（WASD だけ）
@@ -535,7 +657,7 @@ namespace ShoryoumaTaxi
         // ============================================================
         //  できごと
         // ============================================================
-        void Hurt(int w) { water = Mathf.Max(0, water - w); hurtT = 0.5f; shake = 0.35f; inv = 1.1f; se.Play(se.hurt); PopAt(px, y, pz, $"水分 −{w}", ModelFactory.Hex(0x7ad0ff), 24); }
+        void Hurt(int w) { water = Mathf.Max(0, water - w); hurtT = 0.5f; Juice(0.07f, 'm'); inv = 1.1f; se.Play(se.hurt); PopAt(px, y, pz, $"水分 −{w}", ModelFactory.Hex(0x7ad0ff), 24); }
         bool UseCharm()
         {
             if (!charm) return false;
@@ -551,10 +673,11 @@ namespace ShoryoumaTaxi
         void Caught(Cop c)
         {
             if (UseCharm()) { KillCop(c, false); return; }
-            Hurt(8); se.Play(se.whistle); Later(0.15f, () => se.Play(se.cuffs));
+            Hurt(8); Juice(0.12f, 'l'); HitMarkAt(px, y + 0.6f, pz, 1.6f, 0xff8a7a); se.Play(se.whistle); Later(0.15f, () => se.Play(se.cuffs));
             if (riders.Count > 0)
             {
-                int r = riders[riders.Count - 1]; riders.RemoveAt(riders.Count - 1);
+                int r = riders[riders.Count - 1];
+                riders.RemoveAt(riders.Count - 1);
                 var g = ModelFactory.Soul(null, r); g.transform.localScale = Vector3.one * 0.8f;
                 AddFly(g, px, y + 0.5f, pz, R(-4, 4), 6, R(2, 4), 1.4f, 0);
                 c.dead = true; AddFly(c.go, c.x, c.y, c.z, R(-4, 4), 6, R(2, 4), 1.4f, 0);
@@ -568,11 +691,11 @@ namespace ShoryoumaTaxi
             float away = c.x >= px ? 1 : -1;
             c.dead = true;
             AddFly(c.go, c.x, c.y, c.z, away * R(14, 20), R(4, 8), R(6, 10), 1.2f, R(8, 14));
-            Burst(c.x, c.y, c.z, 0xffffff, 26, 9); shake = 0.5f; se.Play(se.ram);
+            Burst(c.x, c.y, c.z, 0xffffff, 26, 9); HitMarkAt((c.x + px) / 2, y, (c.z + pz) / 2, 2.0f); Juice(0.1f, 'm'); se.Play(se.ram);
             PopAt(c.x, c.y, c.z, "吹っ飛ばした！", Color.white, 30);
             if (UseCharm()) return;
             stun = 0.45f; inv = 0.6f;
-            int d = Mathf.Min(fare, DROP_FARE);
+            int d = Mathf.Min(fare, T.ramDropFare);
             if (d > 0)
             {
                 fare -= d; lost += d; se.Play(se.coins);
@@ -584,14 +707,23 @@ namespace ShoryoumaTaxi
         {
             c.dead = true; Destroy(c.go);
             Burst(c.x, c.y, c.z, 0xfff2c0, 30, 7); Burst(c.x, c.y, c.z, 0xff5040, 12, 4);
-            if (bySalt) { kills++; se.Play(se.kill); }
+            if (bySalt) { kills++; se.Play(se.kill); HitMarkAt(c.x, c.y, c.z, 1.5f); Juice(0.06f, 's'); }
+        }
+        void Suri(Cop c)
+        {
+            c.near = true; nearN++;
+            int f = T.suriFare; fare += f; se.Play(se.suri, 0.8f); se.Play(se.coins, 0.6f);
+            var cn = MakeCoin(); cn.transform.SetParent(fx, false); cn.transform.localScale = Vector3.one * 0.6f;
+            AddFly(cn, c.x, c.y, c.z, (px - c.x) * 3, (y - c.y) * 3 + vel, (pz - c.z) * 3 + 2, 0.35f, 0);   // 小銭が車掌の手元へ飛んでくる
+            PopAt(px, y + 0.6f, pz, $"車掌がスった！ +{f}文", ModelFactory.Hex(0xffd060), 24);
+            Teach("suri", "警察の<b>すぐ横</b>をすれ違うと、車掌が懐の小銭を<b>スる</b>（＋2文）。でも近づきすぎるとぶつかるぞ", phase == "out" ? "研修" : "帰り", 4f, 0.3f);
         }
         void TakeItem(ItemW it)
         {
             it.taken = true; it.im.root.SetActive(false); it.tag.root.SetActive(false);
             Burst(it.x, it.y, it.z, ItemCol(it.kind), 26, 6);
             if (it.kind == "water") { water = Mathf.Min(100, water + 30); se.Play(se.water); }
-            else if (it.kind == "wind") { wind = 4; se.Play(se.wind); }
+            else if (it.kind == "wind") { wind = T.windSec; se.Play(se.wind); }
             else { charm = true; se.Play(se.charm); }
             PopAt(it.x, it.y, it.z, ItemName(it.kind) + "：" + ItemEffect(it.kind), ItemCol(it.kind), 26);
         }
@@ -612,7 +744,7 @@ namespace ShoryoumaTaxi
             Banner($"運賃 ＋{sum}文", $"罪人の魂を {delivered}人、現世へ送り届けた{(healed ? "　水分も回復" : "")}", ModelFactory.Hex(0xffd060), 1.6f);
             foreach (var s in souls) if (!s.gone) { s.gone = true; s.go.SetActive(false); }
             tipCur = null; tipQ.Clear();
-            Later(1.5f, () =>
+            Later(1.1f, () =>
             {
                 if (phase != "alarm") return;
                 se.Play(se.siren, 0.7f); se.Play(se.whistle); sirenT = 3;
@@ -631,11 +763,11 @@ namespace ShoryoumaTaxi
             int shortF = st.goal - fare;
             if (shortF > 0)
             {
-                int n = Mathf.Clamp(Mathf.CeilToInt(shortF / 5f) + 2, 4, 14);
+                int n = Mathf.Clamp(Mathf.RoundToInt(shortF / 5f * 0.6f), 3, 10);   // 足りない分の6割ぶん（全部は戻らない）
                 for (int i = 0; i < n; i++)
                 {
                     float yy = Mathf.Lerp(y - 60, START + 30, (i + 0.5f) / n) + R(-6, 6);
-                    var g = ModelFactory.Coin(); g.transform.SetParent(fx, false);
+                    var g = MakeCoin(); g.transform.SetParent(fx, false);
                     coins.Add(new CoinW { go = g, y = yy, x = R(-3, 3), z = R(-2.2f, 2.2f) });
                 }
             }
@@ -687,15 +819,18 @@ namespace ShoryoumaTaxi
             float rel = yy - y, tt = Mathf.Max(0.6f, Mathf.Abs(rel) / speed);
             float ty = y + vel * tt;
             var sP = Road.WP(x, yy, z); var tP = Road.WP(px + offX, ty, pz + offZ);
-            var go = cuff ? ModelFactory.Cuffs() : ModelFactory.Pellet(); go.transform.SetParent(fx, false);
+            var go = cuff ? MakeCuffs() : MakePellet(); go.transform.SetParent(fx, false);
             shots.Add(new ShotW { go = go, p = sP, v = (tP - sP) / tt, cuff = cuff });
         }
 
         // ---- 塩のねらい（道の向きにまっすぐ） ----
+        // 照準はカメラの正面と同じ向き（シューティングの定番：画面のど真ん中＝弾が飛ぶ先）
         void AimLine(out Vector3 w0, out float ddx, out float ddz)
         {
             w0 = Road.WP(px, y, pz);
-            ddx = (Road.Cx(y + 1) - Road.Cx(y - 1)) / 2f; ddz = (Road.Cz(y + 1) - Road.Cz(y - 1)) / 2f;
+            var f = cam != null ? cam.transform.forward : Vector3.up;
+            if (f.y > 0.2f) { ddx = f.x / f.y; ddz = f.z / f.y; }
+            else { ddx = (Road.Cx(y + 1) - Road.Cx(y - 1)) / 2f; ddz = (Road.Cz(y + 1) - Road.Cz(y - 1)) / 2f; }
         }
         Vector3 SaltPos(SaltW s) => new Vector3(s.w0.x + s.dx * (s.y - s.y0), s.y, s.w0.z + s.dz * (s.y - s.y0));
         bool SaltHits(SaltW s, float ty, float tx, float tz, float r)
@@ -706,7 +841,7 @@ namespace ShoryoumaTaxi
         }
         bool InLine(float ty, float tx, float tz, float r)
         {
-            float up = ty - y; if (up < 1 || up > 55) return false;
+            float up = ty - y; if (up < 1 || up > 110) return false;
             AimLine(out var w0, out var ddx, out var ddz); var q = Road.WP(tx, ty, tz);
             return Hyp(w0.x + ddx * up - q.x, w0.z + ddz * up - q.z) < r + 0.3f;
         }
@@ -722,7 +857,7 @@ namespace ShoryoumaTaxi
             var until = tutUntil;
             string[] steps = {
                 "<b>W A S D</b> で動く。光る玉が<b>罪人の魂</b>だ。<b>触れて乗せろ</b>",
-                "魂は何人でも乗る。運賃は白10・黄20・紫30文。<b>乗せるほど遅くなる</b>",
+                "魂は何人でも乗る。運賃は白10・黄20・紫30文。<b>乗せるほど遅くなる</b>。左上の<b>残り時間</b>に気をつけろ",
                 "アイテムだ。<b>水</b>＝水分回復　<b>追い風</b>＝加速　<b>お守り</b>＝1回守る",
                 "巡査だ！ <b>左クリック</b>か <b>Z</b> で塩。<b>白い輪</b>が塩の飛ぶ先だ。ぶつかると<b>魂を1人</b>、弾に当たると<b>水分</b>を取られる",
                 "奥の<b>現世の門</b>まで運べば運賃がもらえる。着けば水分も回復する" };

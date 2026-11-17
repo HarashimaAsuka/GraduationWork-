@@ -50,21 +50,23 @@ namespace ShoryoumaTaxi
         const int RATE = 44100;
         readonly AudioSource src;
         static readonly System.Random rng = new System.Random(11);
-        public AudioClip salt, hit, board, kill, whistle, cuffs, coins, ram, orin, puff, siren, sirenShort, roar, shoot, cuffShot, hurt, swoosh, water, wind, charm, bossHit, win, bell, beep0, beep1;
+        public AudioClip salt, hit, board, kill, whistle, cuffs, coins, ram, orin, puff, siren, sirenShort, roar, shoot, cuffShot, hurt, swoosh, water, wind, charm, bossHit, win, bell, beep0, beep1, suri, cheer;
+        /// <summary>差し替えたい音があれば、インスペクターから入れた AudioClip で上書きする（名前は上のフィールド名と同じ）</summary>
+        public void Override(string field, AudioClip c) { if (c == null) return; var f = GetType().GetField(field); if (f != null && f.FieldType == typeof(AudioClip)) f.SetValue(this, c); }
 
         public TaxiSe(GameObject host)
         {
             src = host.AddComponent<AudioSource>(); src.playOnAwake = false;
-            salt = Clip("salt", Mix(Hiss(0.07f, 0.22f, 3000, 12000), Tone(1900, 900, 0.06f, W.Tri, 0.14f), Tone(220, 90, 0.05f, W.Sine, 0.16f)));
+            salt = Clip("salt", Mix(Hiss(0.07f, 0.12f, 3000, 12000), Tone(1900, 900, 0.06f, W.Tri, 0.085f), Tone(220, 90, 0.05f, W.Sine, 0.095f)));   // 一番よく鳴るので小さめ
             hit = Clip("hit", Mix(Hiss(0.05f, 0.3f, 1500, 9000), Tone(1400, 500, 0.08f, W.Sq, 0.09f), Tone(160, 70, 0.1f, W.Sine, 0.2f)));
             board = Clip("board", Mix(Tone(1760, 1740, 0.6f, W.Sine, 0.2f, 0, 0, 1), Delay(Tone(2637, 2620, 0.45f, W.Sine, 0.1f, 0, 0, 1), 0.06f)));
-            kill = Clip("kill", Mix(Hiss(0.35f, 0.4f, 300, 5000), Tone(420, 70, 0.3f, W.Tri, 0.3f), Tone(1400, 600, 0.12f, W.Sq, 0.08f)));
-            whistle = Clip("whistle", Tone(2900, 2950, 0.45f, W.Sq, 0.09f, 140, 28, 1));
+            kill = Clip("kill", Mix(Tone(160, 50, 0.12f, W.Sine, 0.8f), Hiss(0.35f, 0.55f, 300, 5000), Tone(420, 70, 0.3f, W.Tri, 0.42f), Tone(1400, 600, 0.12f, W.Sq, 0.11f)));   // アタック強め
+            whistle = Clip("whistle", Tone(2900, 2950, 0.45f, W.Sq, 0.13f, 140, 28, 1));
             var c = new float[0]; for (int i = 0; i < 3; i++) c = Mix(c, Delay(Mix(Hiss(0.06f, 0.3f, 2500, 9000), Tone(3100 - i * 300, 2600, 0.05f, W.Sq, 0.08f)), i * 0.05f));
             cuffs = Clip("cuffs", c);
             var co = new float[0]; for (int i = 0; i < 7; i++) co = Mix(co, Delay(Tone(2600 + (float)rng.NextDouble() * 900, 2100, 0.14f, W.Tri, 0.12f), i * 0.055f));
             coins = Clip("coins", co);
-            ram = Clip("ram", Mix(Tone(120, 40, 0.45f, W.Sine, 0.8f), Hiss(0.25f, 0.6f, 80, 2500), Tone(300, 90, 0.2f, W.Saw, 0.15f)));
+            ram = Clip("ram", Mix(Tone(120, 40, 0.45f, W.Sine, 1.0f), Hiss(0.25f, 0.77f, 80, 2500), Tone(300, 90, 0.2f, W.Saw, 0.2f), Hiss(0.06f, 0.48f, 2000, 9000)));
             orin = Clip("orin", Mix(Tone(1180, 1176, 2.2f, W.Sine, 0.25f, 0, 0, 1), Tone(2950, 2940, 1.4f, W.Sine, 0.08f, 0, 0, 1)));
             puff = Clip("puff", Mix(Hiss(0.6f, 0.4f, 200, 2500), Tone(2200, 2100, 0.08f, W.Sq, 0.1f), Delay(Tone(2200, 2100, 0.08f, W.Sq, 0.1f), 0.16f)));
             siren = Clip("siren", Siren(3f)); sirenShort = Clip("sirenS", Siren(1f));
@@ -84,6 +86,9 @@ namespace ShoryoumaTaxi
             bell = Clip("bell", Mix(Tone(880, 880, 2f, W.Sine, 0.3f, 0, 0, 1), Tone(1320, 1320, 2f, W.Sine, 0.12f, 0, 0, 1)));
             beep0 = Clip("beep0", Tone(760, 760, 0.09f, W.Sq, 0.13f));
             beep1 = Clip("beep1", Tone(1100, 1100, 0.09f, W.Sq, 0.13f));
+            suri = Clip("suri", Mix(Hiss(0.12f, 0.18f, 3000, 9000), Delay(Tone(2600, 3400, 0.1f, W.Tri, 0.1f), 0.05f)));
+            var cr = new float[0]; for (int i = 0; i < 6; i++) cr = Mix(cr, Delay(Mix(Hiss(0.05f, 0.25f, 1500, 6000), Tone(500 + i * 90, 300, 0.05f, W.Tri, 0.05f)), i * 0.07f + (float)rng.NextDouble() * 0.03f));
+            cheer = Clip("cheer", cr);
         }
 
         public void Play(AudioClip c, float vol = 1f) { if (c != null) src.PlayOneShot(c, vol); }
