@@ -22,6 +22,7 @@ namespace ShoryoumaTaxi
     ///   IllegalTaxi.HUD.cs  … 画面表示（IMGUI）
     ///   ModelFactory.Police.cs … 警察・大警部などの仮モデル
     ///   TaxiAudio.cs        … BGM（Resources/BGM/sneak・chase・boss）と効果音
+    ///   IllegalTaxi.CanvasHUD … inspector上で編集できるようにしてるｓ
     /// </summary>
     public partial class IllegalTaxi : MonoBehaviour
     {
