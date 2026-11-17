@@ -32,11 +32,12 @@ namespace ShoryoumaTaxi
             triTex = MakeTex(64, (x, yy) => (yy > -0.85f && yy < 0.9f && Mathf.Abs(x) < (0.9f - yy) * 0.55f) ? 1 : 0);
             dotTex = MakeTex(32, (x, yy) => x * x + yy * yy < 0.9f ? 1 : 0);
         }
-        static Texture2D MakeTex(int n, System.Func<float, float, float> a)
+        Texture2D vignetteTex;
+        static Texture2D MakeTex(int n, System.Func<float, float, float> a, Color? rgb = null)
         {
             var tx = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var px = new Color[n * n];
-            for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) px[j * n + i] = new Color(1, 1, 1, a((i + 0.5f) / n * 2 - 1, (j + 0.5f) / n * 2 - 1));
+            var px = new Color[n * n]; var c0 = rgb ?? Color.white;
+            for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) px[j * n + i] = new Color(c0.r, c0.g, c0.b, a((i + 0.5f) / n * 2 - 1, (j + 0.5f) / n * 2 - 1));
             tx.SetPixels(px); tx.Apply(); return tx;
         }
         static void Fill(Rect r, Color c) { var o = GUI.color; GUI.color = c; GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = o; }
@@ -77,6 +78,11 @@ namespace ShoryoumaTaxi
             if (play && hurtT > 0)
                 Fill(new Rect(0, 0, W, H),
                     new Color(0.88f, 0.21f, 0.29f, hurtT / 0.5f * 0.3f));
+            // 背景を少し暗く（まわりを落として、判定のある真ん中を目立たせる）
+            if (vignetteTex == null) vignetteTex = MakeTex(128, (x, yy) => { float d = Mathf.Sqrt(x * x / (0.62f * 0.62f) + yy * yy / (0.66f * 0.66f)); return Mathf.Clamp01((d - 0.55f) / 0.45f) * 0.55f; }, new Color(0.02f, 0.01f, 0.04f));
+            if (play || mode == Mode.Title) GUI.DrawTexture(new Rect(0, 0, W, H), vignetteTex);
+            // 大きな出来事のフラッシュ：白一色にせず、明るい・暗いを交互に
+            if (play && hurtFlash > 0) { bool on = Mathf.FloorToInt(Time.unscaledTime * 20) % 2 == 0; Fill(new Rect(0, 0, W, H), on ? new Color(1, 0.96f, 0.88f, 0.55f * Mathf.Min(1, hurtFlash * 4)) : new Color(0, 0, 0, 0.35f * Mathf.Min(1, hurtFlash * 4))); }
 
             bool chase = play && phase == "back" && bossM.root.activeSelf;
 
@@ -131,6 +137,9 @@ namespace ShoryoumaTaxi
                     );
             }
 
+            // 社名を決める画面（Canvas 側に namePanel がなければ、ここで描く）
+            if (mode == Mode.Name && (!canvasMode || namePanel == null)) { DrawName(W, H); return; }
+
             // Canvas UI使用時は旧画面を描画しない
             if (!canvasMode)
             {
@@ -163,6 +172,15 @@ namespace ShoryoumaTaxi
             Label(new Rect(32, yy, mw, 20), "水分（塩を撒くと減る）", sSmall, cDim);
             Fill(new Rect(32, yy + 22, mw - 28, 11), new Color(1, 1, 1, 0.12f));
             Fill(new Rect(32, yy + 22, (mw - 28) * water / 100f, 11), water < 25 && Mathf.FloorToInt(t * 4) % 2 == 0 ? cHell : cWater);
+            // 制限時間（夜明けまで）
+            if (st.time > 0 && !st.boss)
+            {
+                var tr0 = new Rect(18, (st.boss ? 62 : 112) + 24, 150, 40);
+                Box(tr0, new Color(1, 1, 1, 0.15f));
+                bool low = timeLeft <= 10;
+                Label(new Rect(tr0.x + 12, tr0.y + 10, 70, 20), "夜明けまで", sSmall, cDim);
+                Label(new Rect(tr0.x + 60, tr0.y + 2, 80, 34), FmtTime(timeLeft), new GUIStyle(sBig) { fontSize = 24, alignment = TextAnchor.UpperRight }, low && Mathf.FloorToInt(t * 4) % 2 == 0 ? cHell : cPaper);
+            }
 
             // 上：今やること
             bool outP = phase == "out";
@@ -180,7 +198,8 @@ namespace ShoryoumaTaxi
             {
                 int[] cnt = new int[3]; foreach (int r in riders) cnt[r]++;
                 int est = cnt[0] * 10 + cnt[1] * 20 + cnt[2] * 30;
-                string seat = riders.Count == 0 ? "まだ誰も乗っていない" : $"白×{cnt[0]}　黄×{cnt[1]}　紫×{cnt[2]}　<color=#ffd060>運賃 {est}文の見込み</color>";
+                string seat = riders.Count == 0 ? "まだ誰も乗っていない" : $"白×{cnt[0]}　黄×{cnt[1]}　紫×{cnt[2]}　<color=#ffd060>運賃 {est}文の見込み</color>"
+                    + (fare + est < st.goal ? $"　<color=#ff9a8a>目標まで あと{st.goal - fare - est}文</color>" : "　<color=#9be38a>目標に届く！</color>");
                 Label(new Rect(orc.x, 74, ow, 24), seat, new GUIStyle(sBody) { fontSize = 16, alignment = TextAnchor.UpperCenter }, cPaper);
             }
             // ステージ4：大警部の体力
@@ -191,7 +210,9 @@ namespace ShoryoumaTaxi
                 Label(new Rect(br.x + 14, br.y + 4, 200, 20), "大警部" + (B.shield ? "（護衛が塩をはじく）" : B.stunT > 0 ? "（ひるんでいる！）" : ""), sSmall, new Color(1, 0.6f, 0.55f));
                 float r = bossHp / (float)bossHpMax;
                 Fill(new Rect(br.x + 14, br.y + 24, bw - 28, 12), new Color(1, 1, 1, 0.12f));
+                Fill(new Rect(br.x + 14, br.y + 24, (bw - 28) * Mathf.Clamp01(hpTrail / bossHpMax), 12), new Color(1, 1, 1, 0.75f));   // 減った分が白く残る
                 Fill(new Rect(br.x + 14, br.y + 24, (bw - 28) * r, 12), B.stunT > 0 ? cGold : new Color(1, 0.19f, 0.25f));
+                Label(new Rect(br.x + bw - 214, br.y + 4, 200, 20), BossOpen() ? "<b>スキあり！</b>" : "手で守っている", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight }, BossOpen() ? cGold : cDim);
             }
             // 右：道のり
             float rx = W - 60, top = 110, bot = H - 110;
@@ -259,7 +280,8 @@ namespace ShoryoumaTaxi
             Fill(new Rect(0, 0, W, H), new Color(0, 0, 0, 0.45f));
             float cw = Mathf.Min(900, W - 60), x = (W - cw) / 2;
             Label(new Rect(x, 60, cw, 30), "卒業制作 ／ 3D縦穴アクション ／ 1ステージ約2分", sBody, cDim);
-            Label(new Rect(x, 90, cw, 90), "精霊馬タクシー 地獄営業所", new GUIStyle(sHuge) { alignment = TextAnchor.MiddleLeft }, cPaper);
+            Label(new Rect(x, 90, cw, 90), $"{TaxiSession.CoName}タクシー 地獄営業所", new GUIStyle(sHuge) { alignment = TextAnchor.MiddleLeft }, cPaper);
+            if (GUI.Button(new Rect(x + cw - 150, 60, 150, 34), "社名を変える", new GUIStyle(sBtn) { fontSize = 16 })) OpenName();
             Label(new Rect(x, 180, cw, 60), "無許可営業の違法タクシー。罪人の魂をこっそり現世へ送り、通報されたら地獄まで逃げ帰る。", sBody, cPaper);
             string[] how = { "<b>① 行き：きゅうりの馬</b>\n光る罪人の魂に触れて乗せ、奥の現世の門へ。警察にぶつかると魂を1人捕まえられる。",
                              "<b>② 帰り：ナスの牛</b>\n現世の門で運賃をもらうと通報される。大警部から地獄の門まで逃げきる。牛は警察を吹っ飛ばせるが、運賃を落とす。",
@@ -269,28 +291,69 @@ namespace ShoryoumaTaxi
             Label(new Rect(x, 404, cw, 26), "<b>WASD</b> 移動　<b>左クリック / Z</b> 塩を撒く（白い輪の先へ飛ぶ）　<b>P</b> 一時停止　<b>M</b> 音", sBody, cDim);
             string[] names = { "ステージ1\n研修", "ステージ2\n一日目", "ステージ3\n二日目", "ステージ4\n大警部との決戦" };
             float sw = (cw - 36) / 4;
-            for (int i = 0; i < 4; i++) if (GUI.Button(new Rect(x + i * (sw + 12), 450, sw, 72), names[i], sBtn)) StartStage(i + 1);
+            for (int i = 0; i < 4; i++)
+            {
+                var r = new Rect(x + i * (sw + 12), 450, sw, 72);
+                if (GUI.Button(r, names[i], sBtn)) BeginStage(i + 1);
+                int stars = TaxiSession.Stars(i + 1);
+                Label(new Rect(r.x, r.yMax + 4, sw, 24), stars > 0 ? $"<color=#ffd060>{new string('★', stars)}</color>{new string('☆', 3 - stars)}　ベスト {TaxiSession.Best(i + 1)}{(i == 3 ? "" : "文")}" : "まだ遊んでいない", new GUIStyle(sSmall) { alignment = TextAnchor.UpperCenter }, cDim);
+            }
         }
         void DrawPause(float W, float H)
         {
             Fill(new Rect(0, 0, W, H), new Color(0, 0, 0, 0.55f));
             Label(new Rect(0, H * 0.3f, W, 80), "一時停止", sHuge, cPaper);
-            if (GUI.Button(new Rect(W / 2 - 170, H * 0.5f, 160, 56), "つづける", sBtn)) Resume();
-            if (GUI.Button(new Rect(W / 2 + 10, H * 0.5f, 160, 56), "タイトルへ", sBtn)) ToTitle();
+            float bx = W / 2 - 350;
+            if (GUI.Button(new Rect(bx, H * 0.5f, 160, 56), "続ける（P）", sBtn)) Resume();
+            if (GUI.Button(new Rect(bx + 180, H * 0.5f, 160, 56), "やり直す（R）", sBtn)) Retry();
+            if (GUI.Button(new Rect(bx + 360, H * 0.5f, 160, 56), "タイトルへ", sBtn)) ToTitle();
+            if (GUI.Button(new Rect(bx + 540, H * 0.5f, 160, 56), "社名を変える", sBtn)) OpenName();
         }
         void DrawResult(float W, float H)
         {
             Fill(new Rect(0, 0, W, H), new Color(0, 0, 0, 0.6f));
+            // 褒める紙吹雪（クリアしたとき）
+            if (resultOk)
+            {
+                Color[] cols = { cGold, new Color(1, 0.54f, 0.48f), new Color(0.61f, 0.89f, 0.54f), new Color(0.78f, 0.61f, 1), new Color(0.42f, 0.77f, 0.91f), Color.white };
+                float tt = Time.unscaledTime - resultAt;
+                for (int i = 0; i < 60; i++)
+                {
+                    float dur = 1.8f + (i * 37 % 16) / 10f, delay = (i * 53 % 6) / 10f, k = (tt - delay) / dur;
+                    if (k < 0 || k > 1) continue;
+                    float x = (i * 61 % 100) / 100f * W, yy = -20 + k * (H + 40);
+                    var m = GUI.matrix; GUIUtility.RotateAroundPivot(k * 720 + i * 30, new Vector2(x, yy));
+                    Fill(new Rect(x - 5, yy - 8, 10, 16), cols[i % cols.Length]); GUI.matrix = m;
+                }
+            }
             Label(new Rect(0, 120, W, 30), $"ステージ{st.no}　{st.name}", sCenter, cDim);
             Label(new Rect(0, 160, W, 90), resultTitle, sHuge, resultOk ? cGold : cHell);
             Label(new Rect(W / 2 - 360, 260, 720, 60), resultText, sCenter, cPaper);
             string stats = st.boss ? $"大警部に与えた傷 {Mathf.RoundToInt((1 - bossHp / (float)bossHpMax) * 100)}%　祓った警察 {kills}体　吹っ飛ばした {rams}回"
                                    : $"売上 {fare}文　目標 {st.goal}文　運んだ魂 {delivered}人　落とした運賃 {lost}文";
             Label(new Rect(0, 330, W, 30), stats, sCenter, cPaper);
+            if (resultOk) Label(new Rect(0, 362, W, 34), $"<color=#ffd060>{new string('★', resultStars)}</color>{new string('☆', 3 - resultStars)}" + (resultNewBest ? "　<color=#ffd060>ベスト更新！</color>" : ""), new GUIStyle(sCenter) { fontSize = 26 }, cPaper);
             float bx = W / 2 - 270;
-            if (resultOk && st.no < 4 && GUI.Button(new Rect(bx, 400, 170, 56), "次のステージ", sBtn)) StartStage(st.no + 1);
-            if (GUI.Button(new Rect(bx + 185, 400, 170, 56), "もう一度", sBtn)) StartStage(st.no);
-            if (GUI.Button(new Rect(bx + 370, 400, 170, 56), "タイトルへ", sBtn)) ToTitle();
+            if (resultOk && st.no < 4 && GUI.Button(new Rect(bx, 404, 170, 56), "次のステージ", sBtn)) StartStage(st.no + 1);
+            if (GUI.Button(new Rect(bx + 185, 404, 170, 56), "もう一度（R）", sBtn)) Retry();
+            if (GUI.Button(new Rect(bx + 370, 404, 170, 56), "タイトルへ", sBtn)) ToTitle();
+            if (offerCharmRetry && GUI.Button(new Rect(W / 2 - 170, 472, 340, 52), "お守りを持って再挑戦", new GUIStyle(sBtn) { fontSize = 18 })) RetryWithCharm();
+            Label(new Rect(0, H - 40, W, 24), resultOk && st.no < 4 ? "Enter：次のステージ　R：もう一度" : "Enter / R：もう一度", new GUIStyle(sSmall) { alignment = TextAnchor.UpperCenter }, cDim);
+        }
+        void DrawName(float W, float H)
+        {
+            Fill(new Rect(0, 0, W, H), new Color(0, 0, 0, 0.7f));
+            float cw = Mathf.Min(560, W - 40), x = (W - cw) / 2;
+            Box(new Rect(x, H * 0.25f, cw, 250), cLantern);
+            Label(new Rect(x, H * 0.25f + 20, cw, 40), "あなたの営業所の名前は？", new GUIStyle(sBig) { alignment = TextAnchor.UpperCenter }, cPaper);
+            Label(new Rect(x, H * 0.25f + 64, cw, 24), "「○○タクシー」の○○（8文字まで）", new GUIStyle(sSmall) { alignment = TextAnchor.UpperCenter }, cDim);
+            GUI.SetNextControlName("coName");
+            nameDraft = GUI.TextField(new Rect(x + 60, H * 0.25f + 100, cw - 220, 48), nameDraft ?? "", 8, new GUIStyle(GUI.skin.textField) { font = jpFont, fontSize = 26, alignment = TextAnchor.MiddleCenter });
+            Label(new Rect(x + cw - 156, H * 0.25f + 108, 120, 40), "タクシー", sBig, cPaper);
+            GUI.FocusControl("coName");
+            bool enter = Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
+            if (GUI.Button(new Rect(x + cw / 2 - 170, H * 0.25f + 170, 160, 52), "決定", sBtn) || enter) CloseName(true);
+            if (GUI.Button(new Rect(x + cw / 2 + 10, H * 0.25f + 170, 160, 52), "やめる", sBtn)) CloseName(false);
         }
     }
 }
